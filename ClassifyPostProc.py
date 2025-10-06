@@ -266,6 +266,7 @@ class TurbiditySim:
             h_plus_avg, h_minus_avg = [],[]
             bore, front = [],[]
             THRESH = []
+            #Testing the branch. 
 
             dt = self.T[1]-self.T[0]
             post_collision = False # Flag to determine if the currents have collided yet. 
