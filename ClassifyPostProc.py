@@ -265,39 +265,52 @@ class TurbiditySim:
             h_plus, h_minus = [],[]
             h_plus_avg, h_minus_avg = [],[]
             bore, front = [],[]
-            THRESH = []
-            #Testing the branch. 
 
             dt = self.T[1]-self.T[0]
-            post_collision = False # Flag to determine if the currents have collided yet. 
-            h_max = 0
-            bore_index=0
-            t_count = 0
-            x_ = self.x[int(self.N/2):]
-            for t,u_fake,h_fake in zip(self.T,self.u[:,int(self.N/2):],self.h[:,int(self.N/2):]):
-                u_ = deepcopy(u_fake)
-                h_ = deepcopy(h_fake)
-                window_size = 50
-                if (not post_collision) and h_[0]>2*self.h_min and np.max(h_)<h_max and x_[np.argmax(h_)]<2 and t>t_start:
+            post_collision = False # Flag to determine if the currents have collided yet 
+            h_max = 0 # Intialize h_max to be 0, so that at the first iteration it will be smaller than actual h_max and replaced with h_max
+            bore_index = self.coll_idx # Initialize the bore index as the collision index
+
+            #x_ = self.x[int(self.N/2):]
+
+            for t,u_fake,h_fake in zip(self.T,self.u,self.h):
+                u_ = deepcopy(u_fake) # It appeared that within this loop the data was getting overwritten with u_ (which does not make sense), the deepcopy forces this to NOT happen
+                h_ = deepcopy(h_fake) # Same as above
+                window_size = int(self.N*0.0025) # Create a "viewing window" so that the search for the bore is only local to the previous bore. 
+                if (not post_collision) and h_[bore_index]>2*self.h_min and np.max(h_)<h_max and self.x[np.argmax(h_)]<2 and t>t_start:
+                    '''
+                    There are four conditions (I don't really count t>t_start) we want before tracking the bore. 
+                      1) not post_collision is there to make sure we never flip this flag more than once. 
+                      2) h_[bore]>2*h_min checks that the currents have reach the collision point.
+                      3) After collsion, the fluids jet "up" and this region is fairly noisy, we will wait until the jet starts to recede.
+                         The maximum will be within the jet, we donlt want to track the bore until the current max is smaller than the previous max.
+                         h_max is updated below. 
+                      4) Right after collision, the argmax of h should be near the bore, which should be somewhat near the origin. This is mainly to avoid to "snowplow" being the max.
+
+                      **5) Sometimes I want to force it to start later to ignore and difficulties immediately following collision
+                    '''
                     post_collision = True
-                front_index = np.argwhere(h_>2*self.h_min)[-1][0]
+
+                h_max = np.max(h_)
+                front_index = np.argwhere(h_>2*self.h_min)[-1][0] # Right traveling front.
+
                 if post_collision:
-                    threshold = (h_[int((front_index+bore_index)/2)] + h_[int(bore_index/2)])/2
-                    THRESH.append(threshold)
+                    threshold = (h_[int((front_index+bore_index)/2)] + h_[int((self.coll_idx+bore_index)/2)])/2
                     u_max = np.max(u_)
                     if bore_index:
-                         h_[:max(bore_index-2*window_size,0)]=np.max(h_)
-                         h_[min(bore_index+2*window_size,len(h_)):]=self.h_min
+                         h_[:max(bore_index-2*window_size,0)]=np.max(h_) # Set everything "sufficiently far" behind the bore to be h_max
+                         h_[min(bore_index+2*window_size,self.N):]=self.h_min # Set everythign "sufficiently far" ahead of the bore to be h_min
                     bore_index = np.argwhere(h_>threshold)[-1][0]
-                    u_bore = u_[max(bore_index-window_size,0):bore_index+window_size]
-                    h_bore = h_[max(bore_index-window_size,0):bore_index+window_size]
-                    x_bore = x_[max(bore_index-window_size,0):bore_index+window_size]
-                    u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore)
+                    bore_local_search = range(max(bore_index-window_size,0),min(bore_index+window_size,self.N)+1) # Only search locally around the bore
+                    u_bore = u_[bore_local_search]
+                    h_bore = h_[bore_local_search]
+                    x_bore = self.x[bore_local_search]
+                    u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore) # u_mbi is u_minus bore index, u_pbi is u_plus bore index
                     #if u_mbi == 0: continue
 
-                    bore_loc = (x_[bore_index]-x_[bore_index+1])*(threshold-h_[bore_index+1])/(h_[bore_index]-h_[bore_index+1])+x_[bore_index+1]
+                    bore_loc = (self.x[bore_index]-self.x[bore_index+1])*(threshold-h_[bore_index+1])/(h_[bore_index]-h_[bore_index+1])+self.x[bore_index+1] # Linear approximation between nodes values for height immediately above/below threshold
+
                     if bore_loc < 0.2: continue
-                    #if plot and (not int(t)%2) and np.abs(int(t)-t)<dt/2:
                     if plot and t<2.5:
                         plt.subplot(211)
                         p1 = plt.plot(x_bore,h_bore,label='t=%0.2f'%t)[0]
@@ -314,12 +327,12 @@ class TurbiditySim:
                     h_minus.append(h_bore[u_mbi])
                     h_plus.append(h_bore[u_pbi])
 
-                    front_loc = x_[front_index]
+                    front_loc = self.x[front_index]
 
                     h_minus_avg.append(np.sum(h_[:bore_index])*self.dx/bore_loc)
                     h_plus_avg.append(np.sum(h_[bore_index:front_index])*self.dx/(front_loc-bore_loc))
                     bore.append(bore_loc)
-                    #front_loc = (x_[front_index]-x_[front_index+1])*(2*h_min-h_[front_index+1])/(h_[front_index]-h_[front_index+1])+x_[front_index+1]
+                    #front_loc = (x[front_index]-x[front_index+1])*(2*h_min-h_[front_index+1])/(h_[front_index]-h_[front_index+1])+x[front_index+1]
                     front.append(front_loc)
                 if plot: 
                     plt.subplot(212)
@@ -331,7 +344,6 @@ class TurbiditySim:
                     plt.ylabel('height')
 
                     plt.legend()
-                h_max = np.max(h_)
     
             array_to_save=np.array((np.array(t_post),np.array(bore),np.array(h_plus),np.array(h_minus),np.array(u_plus),np.array(u_minus),np.array(h_plus_avg),np.array(h_minus_avg),np.array(front))).T
             if save: np.savetxt(self.rootFile + 'solutions/postData/post_collision_bore_data_' + self.fileName + '.csv',array_to_save,delimiter=',')
