@@ -185,36 +185,35 @@ class TurbiditySim:
         animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
-    def BoxSWE_MP4(self, tMax=1000., xlim = [0,None], ylim = None,framerate = 30., shape_factor = 1.0):
-
-        fig = plt.figure(figsize=(12,8))
-        camera = Camera(fig)
+    def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], ylim = None,framerate = 30., shape_factor = 1.0):
+        xlim[1] = xlim[1] if xlim[1] else self.x[-1]
+    
+        fig,ax = plt.subplots(2,1,figsize=(6,4))
+        line1, = ax[0].plot(self.x,self.h[0,:])
+        line2, = ax[1].plot(self.x,self.h[0,:])
+        ax[0].set_xlim(self.coll_loc,self.x[-1])
+        ax[0].set_ylim(-0.05,self.h.max()+0.05)
   
-        xlim[1] = xlim[1] if xlim[1] else S.x[-1]
-    
-        if ylim:
-            ymin,ymax= ylim
-        else:
-            ymin,ymax = np.min(self.h),np.max(self.h)
-        
-        for t in self.T:
-            if t>tMax: continue
-            self.height_box_model(t,shape_factor=shape_factor,mp4=True,SWE_LC = 'tab:blue')
-            plt.grid()
-    
-            plt.xlim(xlim)
-            plt.ylim(ylim)
-            timeStr = 't = %0.2f'%(t)
-            plt.text((xlim[0]+xlim[1])/2 if xlim else 0., ymax + 0.1*(ymax-ymin),timeStr,verticalalignment = 'center',horizontalalignment = 'center')
+        def func(t):
+            h_SW = self.h[np.argmin(np.abs(self.T-t)),:]
+            #self.height_box_model(t,shape_factor=shape_factor,mp4=True,SWE_LC = 'tab:blue')
+            line1.set_ydata(h_SW)
+            line2.set_ydata(h_SW)
 
-            print(timeStr)
-            camera.snap()
-    
-        animat = camera.animate()
+            ax[1].set_xlim(self.coll_loc,max(5,self.x[np.argwhere(h_SW>2*self.h_min)[-1][0]]+0.2))
+            ax[1].set_ylim(h_SW.min(),h_SW.max())
 
+            ax[0].set_title('t = %0.2f'%(t))
+            #plt.text((xlim[0]+xlim[1])/2 if xlim else 0., ymax + 0.1*(ymax-ymin),timeStr,verticalalignment = 'center',horizontalalignment = 'center')
+
+            print('t = %0.2f'%(t))
+            return line1,line2
+    
+
+        anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
         Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
-        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWE_shapefactor%0.1f_"%shape_factor
-        animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
+        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWETEST_shapefactor%0.1f_"%shape_factor
+        anim.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
     def plot_height_conc_time(self,desired_time,xlim = None,cb=True,cb_choice='initial',cm='BrBG'):
