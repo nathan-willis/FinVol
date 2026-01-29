@@ -32,18 +32,37 @@ mpllinestyles = ('solid','dashed','dotted','dashdot',(0, (3, 5, 1, 5, 1, 5)))
 mpllinestyles = ('solid','dashed','dotted','dashdot')
 mplmarkers = ('o','v','^','<','>','s','*','D','P','X')
 
-variable_dict = {'c':'concentration', 'c1':'left concentration', 'c2':'right concentration', 'u':'velocity', 'q':'q, conserved velocity', 'phi':'phi, conserved concentration', 'h':'height','h_latex':'$h(x,t)$','u_latex':'$u(x,t)$','c1_latex':'$c_1(x,t)$','c2_latex':'$c_2(x,t)$'}
+variable_dict = {'c':'concentration', 'c1':'left concentration', 'c2':'right concentration', 'u':'velocity', 'q':'q, conserved velocity', 'phi':'phi, conserved concentration', 'h':'height','h_latex':'$h(x,t)$','u_latex':'$u(x,t)$','c1_latex':'$c_1(x,t)$','c2_latex':'$c_2(x,t)$','d1':'deposit 1','d2':'deposit 2'}
 char_to_cons = {'u':'q','c1':'phi1','c2':'phi2'}
 char_vars = ['u','c1','c2']
 
 testFileName = 'SedimentationInitialConditionTest_2025Jun7/'
+
+def load_settling_sims(US=[0,0.005,0.01,0.015,0.02]):
+    S = {}
+    for us in US:
+        S[us] = TurbiditySim(1.,1.,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=14000)
+    return S
+def intersection(x,f,g):
+    '''
+    Find the intersection points between two functions (as vectors) f and g
+    The nodes (x), must be provided as well. 
+    '''
+    y = f-g
+    sign_changes = list(np.argwhere(y[:-1]*y[1:]<=0).flatten())
+    roots = []
+    for sc in sign_changes:
+        x0,x1,y0,y1 = x[sc],x[sc+1],y[sc],y[sc+1]
+        roots.append(x1-y1*(x0-x1)/(y0-y1))
+    return (None if len(roots) == 0 else roots[0]) if len(roots)<=1 else roots
+
 class TurbiditySim:
 
     def __init__(self, hR0, cR0, U_s, rootFile,VARS, N = 5000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 50, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'sims/'):
         self.hR0 = hR0
         self.cR0 = cR0
         self.U_s = U_s
-        self.rootFile = rootFile
+        self.rootFile = rootFile + '' if rootFile[-1] == '/' else rootFile + '/'
         self.subFile = subFile
         self.N = N
         self.NuRe = NuRe
@@ -100,6 +119,12 @@ class TurbiditySim:
 
         for var in whichVars:
             setattr(self,var,single_unpack(var))
+
+    def sim_info(self):
+            # print the log file to screen. 
+            print('')
+            with open(self.rootFile + self.subFile + self.fileName + '/info.log') as fh:
+                for line in fh: print(line)
 
     def makeMP4(self, varList = ['h','u','c1','c2'],tMax=1000.,show_legend = False, xlim = None, ylim = None,framerate = 30.):#xmax = None, xmin = None,ymax = None, ymin = ):
 
@@ -160,18 +185,96 @@ class TurbiditySim:
         animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
-    def plot_time(self,var,desired_time,xlim = None):
+    def BoxSWE_MP4(self, tMax=1000., xlim = [0,None], ylim = None,framerate = 30., shape_factor = 1.0):
+
+        fig = plt.figure(figsize=(12,8))
+        camera = Camera(fig)
+  
+        xlim[1] = xlim[1] if xlim[1] else S.x[-1]
+    
+        if ylim:
+            ymin,ymax= ylim
+        else:
+            ymin,ymax = np.min(self.h),np.max(self.h)
+        
+        for t in self.T:
+            if t>tMax: continue
+            self.height_box_model(t,shape_factor=shape_factor,mp4=True,SWE_LC = 'tab:blue')
+            plt.grid()
+    
+            plt.xlim(xlim)
+            plt.ylim(ylim)
+            timeStr = 't = %0.2f'%(t)
+            plt.text((xlim[0]+xlim[1])/2 if xlim else 0., ymax + 0.1*(ymax-ymin),timeStr,verticalalignment = 'center',horizontalalignment = 'center')
+
+            print(timeStr)
+            camera.snap()
+    
+        animat = camera.animate()
+
+        Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
+        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWE_shapefactor%0.1f_"%shape_factor
+        animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
+        plt.close()
+
+    def plot_height_conc_time(self,desired_time,xlim = None,cb=True,cb_choice='initial',cm='BrBG'):
+        index = np.argmin(np.abs(self.T-desired_time))
+        x_min_idx, x_max_idx = (np.argmin(np.abs(self.x-xlim[0])), np.argmin(np.abs(self.x-xlim[1]))) if xlim else (None, None)
+        x_ = self.x[x_min_idx:x_max_idx]
+        try:
+            h_ = self.h[index,x_min_idx:x_max_idx]
+        except AttributeError:
+            self.unpack(['h'])
+            h_ = self.h[index,x_min_idx:x_max_idx]
+        try:
+            c1_ = self.c1[index,x_min_idx:x_max_idx]
+        except AttributeError:
+            self.unpack(['c1'])
+            c1_ = self.c1[index,x_min_idx:x_max_idx]
+        try:
+            c2_ = self.c2[index,x_min_idx:x_max_idx]
+        except AttributeError:
+            self.unpack(['c2'])
+            c2_ = self.c2[index,x_min_idx:x_max_idx]
+    
+        
+        polygon = plt.fill_between(x_,h_*0,h_,lw=1,color='none')
+        #gradient_denominator = np.array([c1_[ii]+c2_[ii] if c1_[ii]+c2_[ii]!=0 else 1 for ii in range(len(self.x))])
+        verts = np.vstack([p.vertices for p in polygon.get_paths()])
+        gradient = plt.imshow(np.reshape(c1_-c2_,(1,-1)),
+                              cmap = cm,
+                              vmax=self.cL0 if cb_choice=='initial' else None,vmin = -self.cR0 if cb_choice=='initial' else None,
+                              aspect = 'auto',
+                              extent=[verts[:, 0].min(), verts[:, 0].max(), verts[:, 1].min(), verts[:, 1].max()]
+                             )
+        gradient.set_clip_path(polygon.get_paths()[0], transform=plt.gca().transData)
+        #plt.plot(self.x,c1_+c2_,color='k',linewidth=1)
+        plt.plot(x_,h_)
+    
+        if cb:
+            cbar=plt.colorbar(gradient)
+            if cb_choice == 'initial':
+                cbar.set_ticks(ticks=[self.cL0,-self.cR0])
+                cbar.ax.set_yticklabels(['$100\%\ c_2$','$100\%\ c_1$'])
+            elif cb_choice == 'dynamic':
+                cbar.set_ticks(ticks=[np.min(c1_-c2_),np.max(c1_-c2_)])
+                cbar.ax.set_yticklabels(['$100\%\ c_2$','$100\%\ c_1$'])
+    
+        plt.xlabel('$x$')
+        plt.ylabel(variable_dict['h'])
+
+    def plot_time(self,var,desired_time,xlim = None,linestyle=None,color=None):
         index = np.argmin(np.abs(self.T-desired_time))
         x_min_idx, x_max_idx = (np.argmin(np.abs(self.x-xlim[0])), np.argmin(np.abs(self.x-xlim[1]))) if xlim else (None, None)
 
-        plt.plot(self.x[x_min_idx:x_max_idx],getattr(self,var)[index,x_min_idx:x_max_idx],label = '$t=%0.1f$'%self.T[index])
+        plt.plot(self.x[x_min_idx:x_max_idx],getattr(self,var)[index,x_min_idx:x_max_idx],label = '$t=%0.1f$'%self.T[index],linestyle=linestyle,color=color)
 
         plt.xlabel('$x$')
         plt.ylabel(variable_dict[var])
 
-    def plot_times(self,var,times,xlim=None,wl = True):
+    def plot_times(self,var,times,xlim=None,wl = True,linestyle=None,color=None):
         for t in times:
-            self.plot_time(var,t)
+            self.plot_time(var,t,color=color,linestyle=linestyle)
         plt.xlim(xlim)
         if wl: plt.legend()
 
@@ -218,6 +321,35 @@ class TurbiditySim:
         plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f'%(self.hR0,self.cR0))
         plt.xlabel('$x$')
 
+    def plot_deposit_gradient(self,dt_plot=1,xL_tol=1e-5,show=True,save = False, close = True,cb = True):
+        article_params()
+        #plt.figure(figsize=[3.5,2])
+        for desired_time in np.flip(self.T[self.T%dt_plot<0.9*self.dt])[:-1]:
+            print(desired_time)
+            tI = np.argmin(np.abs(self.T-desired_time)) # tI for time index.
+            polygon = plt.fill_between(self.x,self.d1[tI,:]*0,self.d1[tI,:]+self.d2[tI,:],lw=1,color='none')
+            gradient_denominator = np.array([self.d1[tI,ii]+self.d2[tI,ii] if self.d1[tI,ii]+self.d2[tI,ii]!=0 else 1 for ii in range(len(self.x))])
+            verts = np.vstack([p.vertices for p in polygon.get_paths()])
+            gradient = plt.imshow(np.reshape(self.d1[tI,:]/gradient_denominator,(1,-1)),cmap = 'PRGn',aspect = 'auto',extent=[verts[:, 0].min(), verts[:, 0].max(), verts[:, 1].min(), verts[:, 1].max()])
+            gradient.set_clip_path(polygon.get_paths()[0], transform=plt.gca().transData)
+        plt.plot(self.x,self.d1[-1,:]+self.d2[-2,:],color='k',linewidth=1)
+    
+        if cb:
+            cbar=plt.colorbar(gradient)
+            cbar.set_ticks(ticks=[0,1])
+            cbar.ax.set_yticklabels(['$100\%\ d_2$','$100\%\ d_1$'])
+    
+        plt.xlabel('$x$')
+        plt.ylabel('deposit')
+    
+        xL = max(np.abs(self.x[self.d1[-1,:]>xL_tol][0]),np.abs(self.x[self.d2[-1,:]>xL_tol][-1]))
+        plt.xlim([-xL,xL])
+        plt.subplots_adjust(left = 0.16, right =0.94,bottom=0.18,top =0.97)
+        if show: plt.show()
+        if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.png',dpi=1000)
+        if close: plt.close()
+
+
     def plot_intrusion(self,wantLegend=True, want_y_label=True):
         try:
             self.intrustion_mass
@@ -256,7 +388,6 @@ class TurbiditySim:
             h_plus,   h_minus   = C[:,2], C[:,3]
             u_plus,   u_minus   = C[:,4], C[:,5]
             h_plus_avg,   h_minus_avg   = C[:,6], C[:,7]
-            #phi_plus, phi_minus = C[:,6], C[:,7]
             front = C[:,8]
         except OSError: 
             print('cannot open, so I will post process the data MYSELF!')
@@ -270,8 +401,6 @@ class TurbiditySim:
             post_collision = False # Flag to determine if the currents have collided yet 
             h_max = 0 # Intialize h_max to be 0, so that at the first iteration it will be smaller than actual h_max and replaced with h_max
             bore_index = self.coll_idx # Initialize the bore index as the collision index
-
-            #x_ = self.x[int(self.N/2):]
 
             for t,u_fake,h_fake in zip(self.T,self.u,self.h):
                 u_ = deepcopy(u_fake) # It appeared that within this loop the data was getting overwritten with u_ (which does not make sense), the deepcopy forces this to NOT happen
@@ -306,20 +435,17 @@ class TurbiditySim:
                     h_bore = h_[bore_local_search]
                     x_bore = self.x[bore_local_search]
                     u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore) # u_mbi is u_minus bore index, u_pbi is u_plus bore index
-                    #if u_mbi == 0: continue
 
                     bore_loc = (self.x[bore_index]-self.x[bore_index+1])*(threshold-h_[bore_index+1])/(h_[bore_index]-h_[bore_index+1])+self.x[bore_index+1] # Linear approximation between nodes values for height immediately above/below threshold
-
                     if bore_loc < 0.2: continue
-                    if plot and t<2.5:
-                        plt.subplot(211)
-                        p1 = plt.plot(x_bore,h_bore,label='t=%0.2f'%t)[0]
-                        h_boxed = np.array([h_bore[u_mbi] if x_b<bore_loc else h_bore[u_pbi] for x_b in x_bore])
-                        plt.plot(x_bore,h_boxed,linestyle = 'dashed',color = p1.get_color())
+                    h_minus_temp, h_plus_temp = h_bore[u_mbi], h_bore[u_pbi]
+                    new_thresh = (h_minus_temp+h_plus_temp)/2
+                    print(h_minus_temp,h_plus_temp,new_thresh)
+                    #bore_local_index = np.argwhere(h_bore>new_thresh)[-1][0]
 
-                        plt.subplot(212)
-                        #plt.plot(x_bore,u_bore,color = p1.get_color())
-                        plt.plot(x_bore,u_bore)
+                    #bore_local_loc = (x_bore[bore_local_index]-x_bore[bore_local_index+1])*(new_thresh-h_bore[bore_local_index+1])/(h_bore[bore_local_index]-h_bore[bore_local_index+1])+x_bore[bore_local_index+1] # Linear approximation between nodes values for height immediately above/below threshold
+                    #print(bore_local_loc,bore_loc)
+
                      
                     t_post.append(t-self.coll_time)
                     u_minus.append(u_bore[u_mbi])
@@ -328,9 +454,12 @@ class TurbiditySim:
                     h_plus.append(h_bore[u_pbi])
 
                     front_loc = self.x[front_index]
-
-                    h_minus_avg.append(np.sum(h_[:bore_index])*self.dx/bore_loc)
-                    h_plus_avg.append(np.sum(h_[bore_index:front_index])*self.dx/(front_loc-bore_loc))
+                   
+                    
+                    HMA = np.sum(h_[self.coll_idx:bore_index])*self.dx/(bore_loc-self.coll_loc)
+                    HPA = np.sum(h_[bore_index:front_index])*self.dx/(front_loc-bore_loc)
+                    h_minus_avg.append(HMA)
+                    h_plus_avg.append(HPA)
                     bore.append(bore_loc)
                     #front_loc = (x[front_index]-x[front_index+1])*(2*h_min-h_[front_index+1])/(h_[front_index]-h_[front_index+1])+x[front_index+1]
                     front.append(front_loc)
@@ -357,33 +486,162 @@ class TurbiditySim:
         self.uP_data, self.uM_data = subsample(u_plus),subsample(u_minus)
         self.front_data = subsample(front)
 
-    def RH_model(self, t0=0, b0=0, val=None, dt=0.001, f_vel=1.63307, x0=2.5,V=1,final = np.inf,hpf=1,upf=1,hmf=1):
-        dSdt    = lambda hP,hM,uP   : uP + np.sqrt((1/2)*(hM/hP)*(hP+hM)) 
-        h_plus  = lambda V,xN,xI    : V/(2*(xN-xI))*hpf
-        u_plus  = lambda uN,xN,xI,S : uN/(xN-xI)*(S-xI)*upf
-        h_minus = lambda V,hP,xN,S  : (V-hP*(xN-S))/S*hmf
-
-        t,b = t0,b0
-        T, B, F, B_v = [], [], [], []
+    def settling_RH_model(self, t0=0, dt=0.001, final=np.inf, hpf=1, upf=1, hmf=1, tol=1e-14):
+        def get_collision_concentration():
+            collision_time_index = np.argmin(np.abs(self.T-self.coll_time))
+            CR_temp = self.c2[collision_time_index,:]
+            CR_area = (1/2)*np.sum(CR_temp[1:]+CR_temp[:-1])*self.dx
+            CR_bounds = self.x[CR_temp>0.1][[0,-1]]
+            return CR_area/(CR_bounds[1]-CR_bounds[0])
+        self.front_vel()
+        xC = self.coll_loc # xC is the collision point. 
+        uN = self.uN
+        xI = self.apart/2.
+        VR  = 1.*self.hR0
+        cR = self.cR0
+        cC = get_collision_concentration()
+        us = self.U_s
+    
+        print('\n' + '*'*43 + '\n* t0  = %0.5f---initial time \n* xb0 = %0.5f---initial bore position\n* uN  = %0.5f---front velocity\n* xi  = %0.5f---center of initial current\n* V   = %0.5f---volume of right current\n* xc  = %0.5f---collision point\n* cC  = %0.5f---initial concentration\n'%(t0,xC,uN,xI,VR,xC,cC) + '*'*43 + '\n')
+    
+        h_plus  = lambda x_N     : VR/(2*(x_N-xI))*hpf # V here is the initial volume of the right current, NOT the dyanmic V_plus
+        u_plus  = lambda x_N,x_B : uN/(x_N-xI)*(x_B-xI)*upf
+        h_minus = lambda x_N,x_B : h_plus(x_N)*(1 + (x_N-(2*xI-xC))/(x_B-xC))*hmf
+        V_plus  = lambda x_N,x_B : h_plus(x_N)*(x_N-x_B)
+        V_minus = lambda x_N,x_B : h_minus(x_N,x_B)*(x_B-xC)
+    
+        dSdt  = lambda h_P,h_M,u_P,c_P,c_M         : u_P + np.sqrt((1/2)*(h_M/h_P)*(c_P*h_P*h_P-c_M*h_M*h_M)/(h_P-h_M))
+        dcPdt = lambda h_P,c_P                    : -us*c_P/h_P
+        dcMdt = lambda h_P,h_M,u_P,c_P,c_M,x_B,x_N : -us*c_M/h_M + (h_P*(c_M-c_P)*(u_plus(x_N,x_B)-dSdt(h_P,h_M,u_P,c_P,c_M)))/V_minus(x_N,x_B)
+    
+        def f_rhs(X):
+            xb, xn, cm, cp = X
+        
+            hP_ = h_plus(xn) 
+            uP_ = u_plus(xn,xb)
+            dcP = dcPdt(hP_,cp)
+            if np.abs(xb-xC)>tol:
+                hM_ = h_minus(xn,xb)
+                ub  = dSdt(hP_,hM_,uP_,cp,cm)
+                dcM = dcMdt(hP_,hM_,uP_,cp,cm,xb,xn)
+            else:
+                #import cmath
+                #p = -(H + (uN**2)/3)
+                #q = 2*(uN**3)/27 - H*uN/6
+                #D = (p**3)/27 + (q**2)/4
+                #u1 = -q/2 + complex(D)**0.5
+                #return np.real(u1**(1/3)-p/(3*u1**(1/3))-uN/3)
+                from scipy.optimize import fsolve
+                fv   = lambda v: 2*v**2*(v+uN) - hmf*hP_*cC*(v+hmf*v+hmf*uN)
+                ub   = fsolve(fv,0.5)[0]
+                hM_  = hP_*(1 + uN/ub)*hpf
+                zeta = -1#(uN-ub)/(uN+ub)
+                dcM  = us*cC/(1-zeta)*(zeta/hP_-1/hM_)
+                print('\nh_minus(0) = %0.6f\nub(0)  = %0.6f\ndcM(0) = %0.6f'%(hM_,ub,dcM))
+            return np.array([ub,uN,dcM,dcP])
+    
+        t,xb,xn,cm,cp = t0,xC,2*xI-xC,cC,cC
+        X = np.array([xb,xn,cm,cp])
+        T, xB, xN, B_v,cM,cP = [], [], [], [],[],[]
         hM, hP, uP = [], [], []
         while t<=min(final,self.T[-1]-self.coll_time):
-            B.append(b)
+            xB.append(X[0])
+            cM.append(X[2])
+            cP.append(X[3])
             T.append(t)
-
-            f = 2*x0 + f_vel*(t)
-            F.append(f)
-            hP_ = h_plus(V,f,x0)
-            uP_ = u_plus(f_vel,f,x0,b)
-            hM_ = h_minus(V,hP_,f,b)
-
-            c = dSdt(hP_,hM_,uP_)
-
-            b = b + dt*c
-
-            B_v.append(c)
+    
+            k1 = f_rhs(X)
+            k2 = f_rhs(X+dt/2*k1)
+            k3 = f_rhs(X+dt/2*k2)
+            k4 = f_rhs(X+dt*k3)
+            U = (k1+2*k2+2*k3+k4)/6
+            X += dt*U
+    
+            hP_ = h_plus(X[1]) 
+            uP_ = u_plus(X[1],X[0])
+            hM_ = h_minus(X[1],X[0])
             hP.append(hP_)
             hM.append(hM_)
             uP.append(uP_)
+    
+            xN.append(X[1])
+            B_v.append(U[0])
+    
+            t+=dt
+    
+        self.hP= np.array(hP)
+        self.hM= np.array(hM)
+        self.uP= np.array(uP)
+    
+        self.xN = np.array(xN)
+        self.xB = np.array(xB)
+        self.cM = np.array(cM)
+        self.cP = np.array(cP)
+        self.B_vel = np.array(B_v)
+        self.t_num = np.array(T)
+
+    def RH_model(self, t0=0, dt=0.001, final=np.inf, hpf=1, upf=1, hmf=1, tol=1e-14):
+        self.front_vel()
+        xC = self.coll_loc # xC is the collision point. 
+        uN = self.uN
+        xI = self.apart/2.
+        VR  = 1.*self.hR0
+        cR = self.cR0
+
+        print('\n' + '*'*43 + '\n* t0  = %0.5f---initial time \n* xb0 = %0.5f---initial bore position\n* uN  = %0.5f---front velocity\n* xi  = %0.5f---center of initial current\n* V   = %0.5f---volume of right current\n* xc  = %0.5f---collision point\n* cR  = %0.5f---initial concentration\n'%(t0,xC,uN,xI,VR,xC,cR) + '*'*43 + '\n')
+
+        dSdt    = lambda hP,hM,uP   : uP + np.sqrt((1/2)*(hM/hP)*cR*(hP+hM))
+        h_plus  = lambda V,xN,xI    : V/(2*(xN-xI))*hpf
+        u_plus  = lambda uN,xN,xI,xB : uN/(xN-xI)*(xB-xI)*upf
+        h_minus = lambda xI,hP,xN,xB  : hP*(1 + (xN-(2*xI-xC))/(xB-xC))*hmf
+
+        def f_rhs(X):
+            xb, xn = X
+        
+            hP_ = h_plus(VR,xn,xI) 
+            uP_ = u_plus(uN,xn,xI,xb)
+            if np.abs(xb-xC)>tol:
+                hM_ = h_minus(xI,hP_,xn,xb)
+                ub = dSdt(hP_,hM_,uP_)
+            else:
+                #import cmath
+                #p = -(H + (uN**2)/3)
+                #q = 2*(uN**3)/27 - H*uN/6
+                #D = (p**3)/27 + (q**2)/4
+                #u1 = -q/2 + complex(D)**0.5
+                #return np.real(u1**(1/3)-p/(3*u1**(1/3))-uN/3)
+                from scipy.optimize import fsolve
+                fv = lambda v: 2*v**2*(v+uN) - hmf*hP_*cR*(v+hmf*v+hmf*uN)
+                ub = fsolve(fv,0.5)[0]
+                hM_ = hP_*(1 + uN/ub)*hpf
+                print('\nh_minus(0) = %0.6f\nub(0)  = %0.6f\n'%(hM_,ub))
+            
+            return np.array([ub,uN])
+
+        t,xb,xn = t0,xC,2*xI-xC
+        X = np.array([xb,xn])
+        T, xB, xN, B_v = [], [], [], []
+        hM, hP, uP = [], [], []
+        while t<=min(final,self.T[-1]-self.coll_time):
+            xB.append(X[0])
+            T.append(t)
+
+            k1 = f_rhs(X)
+            k2 = f_rhs(X+dt/2*k1)
+            k3 = f_rhs(X+dt/2*k2)
+            k4 = f_rhs(X+dt*k3)
+            U = (k1+2*k2+2*k3+k4)/6
+            X += dt*U
+
+            hP_ = h_plus(VR,X[1],xI) 
+            uP_ = u_plus(uN,X[1],xI,X[0])
+            hM_ = h_minus(xI,hP_,X[1],X[0])
+            hP.append(hP_)
+            hM.append(hM_)
+            uP.append(uP_)
+
+            xN.append(X[1])
+            B_v.append(U[0])
 
             t+=dt
 
@@ -391,35 +649,36 @@ class TurbiditySim:
         self.hM= np.array(hM)
         self.uP= np.array(uP)
 
-        self.F = np.array(F)
-        self.B = np.array(B)
+        self.xN = np.array(xN)
+        self.xB = np.array(xB)
         self.B_vel = np.array(B_v)
         self.t_num = np.array(T)
 
-    def RH_plots(self, show=True):
+    def RH_plots(self, show=True,cutoff_init=0):
+        article_params()
         plt.figure(figsize = [7.5,7.5]) 
 
         plt.subplot(221)
-        plt.plot(self.t_post,self.hP_data,label = 'data')
-        plt.plot(self.t_num,self.hP,label = 'model')
+        plt.plot(self.t_post,self.hP_data,label = 'SW')
+        plt.plot(self.t_num[cutoff_init:],self.hP[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$h^+$')
         plt.legend()
         plt.subplot(222)
-        plt.plot(self.t_post,self.hM_data,label = 'data')
-        plt.plot(self.t_num,self.hM,label = 'model')
+        plt.plot(self.t_post,self.hM_data,label = 'SW')
+        plt.plot(self.t_num[cutoff_init:],self.hM[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$h^-$')
         plt.legend()
         plt.subplot(223)
-        plt.plot(self.t_post,self.uP_data,label = 'data')
-        plt.plot(self.t_num,self.uP,label = 'model')
+        plt.plot(self.t_post,self.uP_data,label = 'SW')
+        plt.plot(self.t_num[cutoff_init:],self.uP[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$u^+$')
         plt.legend()
         plt.subplot(224)
-        plt.plot(self.t_post,self.vel(self.bore),label = 'data')
-        plt.plot(self.t_num,self.B_vel,label = 'model')
+        plt.plot(self.t_post,self.vel(self.bore),label = 'SW')
+        plt.plot(self.t_num[cutoff_init:],self.B_vel[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel("$\\frac{dx_b}{dt}$")
         plt.legend()
@@ -428,14 +687,88 @@ class TurbiditySim:
 
         if show: plt.show()
 
-    def vel(self,x,sigma=2):
-        dt = self.t_post[1]-self.t_post[0]
-        v = (x[2:]/2-x[:-2]/2)/dt
-        v0 = (-3/2*x[0]+2*x[1]-1/2*x[2])/dt
-        vN = (1/2*x[-3]-2*x[-2]+3/2*x[-1])/dt
-        print('This velocity data has been filtered with a Gaussian filter with Sigma = %i'%sigma)
-        return gaussian_filter1d(np.hstack((v0,v,vN)),sigma)
+    def vel(self,x,sigma=8):
+        def interpolate_expand_filter_cut(T,U,sigma,n=25):
+            from scipy.ndimage import gaussian_filter1d
+            dt = T[1]-T[0]
+        
+            tb, ub = T[:n], U[:n]
+            te, ue = T[-4*n:], U[-4*n:]
+            Pb, Pe = np.polyfit(tb,ub,2), np.polyfit(te,ue,1)
+        
+            Tb = np.flip(np.array([T[0]  - (i+1)*dt for i in range(n)]))
+            Te = np.array([T[-1] + (i+1)*dt for i in range(n)])
+            Ub = Pb[0]*Tb**2 + Pb[1]*Tb + Pb[2]
+            Ue = Pe[0]*Te + Pe[1]
+        
+            T_expand, U_expand  = np.hstack((Tb,T,Te)), np.hstack((Ub,U,Ue))
+            U_filter = gaussian_filter1d(U_expand,sigma = sigma,mode = 'nearest')
+        
+            return U_filter[n:-n]
+        '''
+        This function computes the velocity at the nodes given the poistion.
+        The interior points use centered differences, the endpoints use one-sided differences.
+        This takes into account the grid not bein equidistant
+        ''' 
+        #dt = self.t_post[1]-self.t_post[0]
+        dt0 = self.t_post[1:-1]-self.t_post[:-2]
+        dt1 = self.t_post[2:]-self.t_post[1:-1]
+        v = (dt0/(dt1*(dt0+dt1)))*x[2:] + ((dt1-dt0)/(dt0*dt1))*x[1:-1] + (-dt1/(dt0*(dt0+dt1)))*x[:-2]
 
+        v0 = (-3/2*x[0]+2*x[1]-1/2*x[2])/(self.t_post[1]-self.t_post[0])
+
+        dtN = self.t_post[-1]-self.t_post[-2]
+        DtN = self.t_post[-1]-self.t_post[-3]
+        a = dtN/(DtN*(DtN-dtN))
+        b = -DtN/(dtN*(DtN-dtN))
+        c = -a-b
+        vN = a*x[-3] + b*x[-2] + c*x[-1]
+
+        print('This velocity data has been filtered with a Gaussian filter with Sigma = %i'%sigma)
+        #return gaussian_filter1d(np.hstack((v0,v,vN)),sigma,mode=mode)
+        return interpolate_expand_filter_cut(self.t_post,np.hstack((v0,v,vN)),sigma)
+
+    def height_box_data(self,desired_time):
+        self.bore_data()
+        idx = np.argmin(np.abs(self.t_post - (desired_time-self.coll_time)))
+        bore_pos = self.bore[idx]
+        front_pos = self.front_data[idx]
+        hp = self.hP_data[idx]
+        hm = self.hM_data[idx]
+        up = self.uP_data[idx]
+        um = self.uM_data[idx]
+        x_upper_bound = np.ceil(1.05*front_pos)
+
+        article_params()
+        plt.figure(figsize=[6.5,1.3])
+        plt.subplot(121)
+        self.plot_time('h', desired_time, xlim=[0,x_upper_bound])
+        plt.plot([bore_pos]*2,[0, hm],color = 'k',linestyle = 'dashed',linewidth = 2)
+        plt.plot([0, bore_pos],2*[hm],color = 'k',linestyle = 'dashed',linewidth = 2)
+        plt.plot([0, front_pos],2*[0],color = 'k',linestyle = 'dashed',linewidth = 2)
+        plt.plot([bore_pos, front_pos],2*[hp],color = 'k',linestyle = 'dashed',linewidth = 2)
+        plt.plot([front_pos]*2,[0, hp],color = 'k',linestyle = 'dashed',linewidth = 2)
+     
+    def height_box_model(self,desired_time,shape_factor=1.0,mp4=False,SWE_LC = None):
+        try: 
+            self.t_num
+        except AttributeError:
+            self.RH_model(hmf=shape_factor)
+        idx = np.argmin(np.abs(self.t_num - (desired_time-self.coll_time)))
+        bore_pos = self.xB[idx]
+        front_pos = self.xN[idx]
+        hp = self.hP[idx]
+        hm = self.hM[idx]
+        x_upper_bound = np.ceil(1.05*front_pos)
+
+        self.plot_time('h', desired_time,color=SWE_LC)
+        LC = plt.gca().lines[-1].get_color()
+        plt.plot([bore_pos]*2,[0, hm],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
+        plt.plot([0, bore_pos],2*[hm],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
+        plt.plot([0, front_pos],2*[0],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
+        plt.plot([bore_pos, front_pos],2*[hp],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
+        plt.plot([front_pos]*2,[0, hp],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
+ 
     def box_model_schematic(self,time,show=True):
         self.bore_data()
         idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
@@ -474,8 +807,70 @@ class TurbiditySim:
         plt.annotate('$x_N$',xy=(front_pos,plt.gca().get_ylim()[0]),xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*(plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0])), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
 
         plt.subplots_adjust(left = 0.07,right = 0.99, bottom = 0.3, top = 0.98,wspace = 0.15)
-        plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.png',dpi = 1200)
-        plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.pdf')
+        if show:
+            plt.show()
+        else:
+            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.png',dpi = 1200)
+            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.pdf')
+
+    def num_val_schematic(self,time,show=True):
+        self.bore_data()
+        idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
+        bore_pos = self.bore[idx]
+        front_pos = self.front_data[idx]
+        hp = self.hP_data[idx]
+        hm = self.hM_data[idx]
+        up = self.uP_data[idx]
+        um = self.uM_data[idx]
+
+        x_u = np.ceil(1.05*front_pos)
+        x_l = np.floor(1.05*self.x[np.argwhere(self.h[np.argmin(np.abs(self.T-time)),:]>2*self.h_min)[0][0]]) 
+        x_upper_bound =  max(x_u,np.abs(x_l))
+        x_lower_bound = -max(x_u,np.abs(x_l))
+
+        article_params()
+        plt.figure(figsize=[6.5,1.3])
+  
+        plt.subplot(131)
+        #self.plot_height_conc_time(0,xlim=[-5,5],cb=False)
+        self.plot_time('h', 0, xlim=[-5,5])
+        y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
+        x_width = plt.gca().get_xlim()[1]-plt.gca().get_xlim()[0]
+        plt.annotate('$h_r$',xy=(self.apart/2,self.hR0),xytext=(self.apart/2 - 0.2*x_width,self.hR0), horizontalalignment='right',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        #plt.annotate('$c_r$',xy=(self.apart/2,0.4*self.hR0),xytext=(self.apart/2 + 0.4*x_upper_bound,0.4*self.hR0), horizontalalignment='left',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.text(plt.gca().get_xlim()[0]+0.05*x_width,plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%0)
+        plt.gca().set_xticks([-5,0,5])
+
+        plt.subplot(132)
+        #self.plot_height_conc_time(time,xlim=[x_lower_bound,x_upper_bound],cb=False)
+        self.plot_time('h', time, xlim=[x_lower_bound,x_upper_bound])
+
+        x_width = plt.gca().get_xlim()[1]-plt.gca().get_xlim()[0]
+        y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
+        plt.annotate('$h_-$',xy=(bore_pos+0.01*x_width,hm),xytext=(bore_pos + 0.3*x_width,hm), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate('$h_+$',xy=(bore_pos+0.01*x_width,hp),xytext=(bore_pos + 0.3*x_width,hp+0.0), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate('$x_b$',xy=(bore_pos, hp-0.05*y_height),xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate('$x_N$',xy=(front_pos,plt.gca().get_ylim()[0]),xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.text(x_lower_bound+0.05*(x_upper_bound-x_lower_bound),plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%time)
+        #plt.gca().set_xticks([-10,0,10])
+        plt.gca().set_xticks([-12,-6,0,6,12])
+         
+
+        plt.subplot(133)
+        self.plot_time('u', time, xlim=[x_lower_bound,x_upper_bound])
+        plt.xlabel('$x$')
+        plt.annotate('$u_+$',xy=(bore_pos+0.02*x_upper_bound,up),xytext=(bore_pos + 0.4*x_upper_bound,up), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate('$u_-$',xy=(bore_pos-0.02*x_upper_bound,um),xytext=(bore_pos - 0.4*x_upper_bound,um), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
+        plt.annotate('$x_b$',xy=(bore_pos,up-0.05*y_height),xytext=(bore_pos,up-0.35*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.text(x_lower_bound+0.05*(x_upper_bound-x_lower_bound),plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%time)
+        #plt.gca().set_xticks([-10,0,10])
+        plt.gca().set_xticks([-12,-6,0,6,12])
+        plt.annotate('$x_N$',xy=(front_pos,up-0.05*y_height),xytext=(front_pos,up-0.35*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+
+        plt.subplots_adjust(left = 0.07,right = 0.99, bottom = 0.3, top = 0.96,wspace = 0.26)
+        plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.png',dpi = 1200)
+        plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.pdf')
         if show: plt.show()
 
     def spacetime(self,xlim=[None,None],tmax = None,show=False):
@@ -498,14 +893,19 @@ class TurbiditySim:
         plt.savefig(self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName + '.pdf')
         if show: plt.show()
 
+    def front_vel(self):
+        vel = np.max(self.u[:,np.argwhere(self.x>0)],1)
+        self.uN = np.average(vel[self.T>self.coll_time])
+        return vel
+        
     def front_vel_plot(self, show=True):
         plt.figure(figsize=[3.5,2])
         article_params()
-        vel = np.max(self.u[:,np.argwhere(self.x>0)],1)
+        vel = self.front_vel()
         plt.plot(self.T,vel)
         plt.axvspan(self.coll_time,self.T[-1],color = 'gray', alpha = 0.3)
-        plt.plot(self.T[self.T>self.coll_time], self.T[self.T>self.coll_time]*0+np.average(vel[self.T>self.coll_time]), linestyle = 'dashed',color='k')
-        plt.text(3*self.coll_time, 0.98*np.average(vel[self.T>self.coll_time]), '$u_N\\approx%0.2f$'%np.average(vel[self.T>self.coll_time]), verticalalignment='top', horizontalalignment='left')
+        plt.plot(self.T[self.T>self.coll_time], self.T[self.T>self.coll_time]*0+self.uN, linestyle = 'dashed',color='k')
+        plt.text(3*self.coll_time, 0.98*self.uN, '$u_N\\approx%0.2f$'%self.uN, verticalalignment='top', horizontalalignment='left')
     
         plt.xlabel('time, $t$')
         plt.ylabel('nose velocity, $\\frac{dx_N}{dt}$')
@@ -517,40 +917,163 @@ class TurbiditySim:
         plt.savefig(self.rootFile + 'solutions/plots/' + 'FrontVel_' + self.fileName + '.pdf')
         if show: plt.show()
 
+    def equal_conc(self,desired_time):
+        T_idx = np.argmin(np.abs(self.T-desired_time))
+        C = self.c1[T_idx,:] - self.c2[T_idx,:]
+        low_idx,high_idx = np.argmax(C),np.argmin(C)
+        C_local = C[low_idx:high_idx]
+        x_local = self.x[low_idx:high_idx]
+    
+        return intersection(x_local,C_local,x_local*0)
+    def equal_conc_pos_vs_time(self,start_time,label=None):
+        times = self.T[self.T>=start_time]
+        EC = np.array([self.equal_conc(t) for t in times])
+        plt.plot(times-self.coll_time,EC-self.coll_loc,label = label)
 
+        plt.xlabel('time (t=0 is collision)')
+        plt.ylabel('position of equal concentration (0 is collision)')
 
-#t = TurbiditySim(1.0,1.0,0.0,'Jul16_BoxModel/',['h','u'],N = 20000, sharp = 200)
+def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
+    '''
+    This function plots the position and the velocity of the bore
+    for both the Box Model and Shallow Water Model. 
+    Here, settling is assumed to be 0, and the asymmetry is varied.
+    in Box_SWE_Settling(), the settling is nonzero, but the currents are symmetric.
+    '''
+    if Sims == None:
+        Sims = []
+        for sim in SimVars:
+            Sims.append(TurbiditySim(sim[0],sim[1],0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
+    
+    article_params()
+    plt.figure(figsize=[5.125,3])
+    legend_list = ['SW','Box','']
+    legend_colors = ['k']*2 + ['white']
+    legend_linestyles = list(mpllinestyles[:2]) + ['solid']
+    for i,sim in enumerate(Sims):
+        sim.bore_data()
+        sim.RH_model(hmf=shape_factor)
+        plt.subplot(211)
+        plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(sim.t_num,sim.B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time, $t$')
+        plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
+        
+        plt.subplot(212)
+        plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(sim.t_num,sim.xB,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time, $t$')
+        plt.ylabel('position, $x_b$')
+        legend_list.append('$h_0$=%0.2f, $c_0$=%0.2f'%(sim.hR0,sim.cR0))
 
-h_plus  = lambda V,xN,xI    : V/(2*(xN-xI))
-u_plus  = lambda uN,xN,xI,S : uN/(xN-xI)*(S-xI)
-h_minus = lambda V,hP,xN,S  : (V-hP*(xN-S))/S
-dSdt = lambda hP,hM,uP: uP + np.sqrt((1/2)*(hM/hP)*(hP+hM)) 
+    legend_colors += list(tabcolors[:len(Sims)])
+    legend_linestyles += [mpllinestyles[0]]*(len(Sims))
+    #for sp in [2,1]:
+    #    plt.subplot(2,1,sp)
+    leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.25,1.6))
+    for i,j in enumerate(leg.legendHandles):
+        j.set_color(legend_colors[i])
+        j.set_linestyle(legend_linestyles[i])
+    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.38)
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
+    plt.close()
+    return Sims
+
+def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.,shape_factor=1.,dt=0.01):
+    '''
+    This function plots the position and the velocity of the bore
+    for both the Box Model and Shallow Water Model. 
+    Here, settling is nonzero, but the currents are symmetric,
+    in Box_SWE_Asym(), the settling is 0, but the currents are asymmetric.
+    '''
+    if Sims == None:
+        Sims = []
+        for us in U_s:
+            Sims.append(TurbiditySim(1.0,1.0,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
+    
+    article_params()
+    plt.figure(figsize=[5.125,3.])
+    legend_list = ['SW','Box','']
+    legend_colors = ['k']*2 + ['white']
+    legend_linestyles = list(mpllinestyles[:2]) + ['solid']
+    for i,sim in enumerate(Sims):
+        sim.bore_data()
+        sim.settling_RH_model(hmf=shape_factor,dt=dt)
+        plt.subplot(211)
+        plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(sim.t_num,sim.xB,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time, $t$')
+        plt.ylabel('position, $x_b$')
+        
+        plt.subplot(212)
+        plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(sim.t_num,sim.B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time, $t$')
+        plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
+        legend_list.append('$U_s=$%0.3f'%(sim.U_s))
+
+    legend_colors += list(tabcolors[:len(Sims)])
+    legend_linestyles += [mpllinestyles[0]]*(len(Sims))
+    leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.25,1.6))
+    for i,j in enumerate(leg.legendHandles):
+        j.set_color(legend_colors[i])
+        j.set_linestyle(legend_linestyles[i])
+    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.38)
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
+    plt.close()
+
+    plt.figure(figsize=[5.125,2.])
+    legend_list = ['$c_-$','$c_+$','']
+    legend_colors = ['k']*2 + ['white']
+    legend_linestyles = list(mpllinestyles[:2]) + ['solid']
+    for i,sim in enumerate(Sims):
+        sim.bore_data()
+        sim.settling_RH_model(hmf=shape_factor,dt=dt)
+        plt.plot(sim.t_num,sim.cM,color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(sim.t_num,sim.cP,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time, $t$')
+        plt.ylabel('concentration')
+        
+        legend_list.append('$U_s=$%0.3f'%(sim.U_s))
+
+    legend_colors += list(tabcolors[:len(Sims)])
+    legend_linestyles += [mpllinestyles[0]]*(len(Sims))
+    leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.15,1.))
+    for i,j in enumerate(leg.legendHandles):
+        j.set_color(legend_colors[i])
+        j.set_linestyle(legend_linestyles[i])
+    plt.subplots_adjust(left=0.09,bottom=0.19,top=0.97,right=0.78)
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
+
 def test_plots(T):
     #T = TurbiditySim(1.0,1.0,0.0,'Jul16_BoxModel/',['h','u','c1','c2'],N=20000,sharp = 200)
     T.RH_model()
     T.RH_model_OLD()
     
     plt.subplot(221)
-    plt.plot(T.t_post,T.hP_data,label = 'data')
-    plt.plot(T.t_post,T.hP_model,label = 'model')
+    plt.plot(T.t_post,T.hP_data,label = 'SW')
+    plt.plot(T.t_post,T.hP_model,label = 'Box')
     plt.xlabel('time')
     plt.ylabel('$h^+$')
     plt.legend()
     plt.subplot(222)
-    plt.plot(T.t_post,T.hM_data,label = 'data')
-    plt.plot(T.t_post,T.hM_model,label = 'model')
+    plt.plot(T.t_post,T.hM_data,label = 'SW')
+    plt.plot(T.t_post,T.hM_model,label = 'Box')
     plt.xlabel('time')
     plt.ylabel('$h^-$')
     plt.legend()
     plt.subplot(223)
-    plt.plot(T.t_post,T.uP_data,label = 'data')
-    plt.plot(T.t_post,T.uP_model,label = 'model')
+    plt.plot(T.t_post,T.uP_data,label = 'SW')
+    plt.plot(T.t_post,T.uP_model,label = 'Box')
     plt.xlabel('time')
     plt.ylabel('$u^+$')
     plt.legend()
     plt.subplot(224)
-    plt.plot(T.t_post,T.vel(T.bore),label = 'data')
-    plt.plot(T.t_post,T.vel(T.bore_model),label = 'model')
+    plt.plot(T.t_post,T.vel(T.bore),label = 'SW')
+    plt.plot(T.t_post,T.vel(T.bore_model),label = 'Box')
     plt.xlabel('time')
     plt.ylabel("$S'(t)$")
     plt.legend()
@@ -645,7 +1168,38 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
     intrusion_only(0.01)
     intrusion_only(0.015)
 
+def encroachment_by_concentration(t=[(1.0,1.0),(1.04,0.9),(1.06,0.8),(1.11,0.7),(0.7,0.7)], times=[i*10 for i in range(1,5)], U_s=0.0, rootFile='Nov24_AsymBoxModel/',sharp=100,N=7000):
+    article_params()
+    t = [TurbiditySim(i[0],i[1],U_s,rootFile,['h','u','c1','c2'],sharp=sharp,N=N) for i in t]
+    for jj,i in enumerate(t):
+        plt.figure()
+        plt.title('$h_0$ = %0.2f, $c_0$=%0.2f'%(i.hR0,i.cR0))
+        i.plot_times('c1',times,xlim=[-2,2] if jj<len(t)-1 else [0,12])
+        plt.gca().set_prop_cycle(None)
+        i.plot_times('c2',times,xlim=[-2,2] if jj<len(t)-1 else [0,12],linestyle='dashed',wl=False)
+        plt.plot(2*[i.coll_loc],[0,1],color='k')
+        plt.ylabel('concentrations \n solid: c1, dashed: c2')
+        plt.tight_layout()
+        plt.savefig('Nov24_AsymBoxModel/solutions/plots/' + f'ConcentrationAtCollision_h0_{i.hR0:.2f}_c0_{i.cR0:.2f}'.replace('.','_')+'.pdf')
+        plt.close()
+
+    plt.figure(figsize=[8,4])
+    plt.subplot(121)
+    for i in t:
+        i.equal_conc_pos_vs_time(2*i.coll_time,label = '$h_0$: %0.2f, $c0$: %0.2f'%(i.hR0,i.cR0))
+    plt.legend()
+    plt.subplot(122)
+    for i in t[:-1]:
+        i.equal_conc_pos_vs_time(2*i.coll_time,label = '$h_0$: %0.2f, $c_0$: %0.2f'%(i.hR0,i.cR0))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('Nov24_AsymBoxModel/solutions/plots/EqualConcenctrationPosition.pdf')
+    plt.close()
+
+    return t
+
 class DepositionAnalysis:
+    # SedimentationInitialConditionTest_2025Jun7 is rootFile for full test.
     def __init__(self, U_s, rootFile, H2=np.linspace(0.7,1.42,73), C2=np.linspace(0.7,1.42,73), N = 5000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 50, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'solutions/postData/'):
         self.H2 = H2
         self.C2 = C2
@@ -765,6 +1319,18 @@ class DepositionAnalysis:
                 'aspectmode':'manual','aspectratio':dict(x=1, y=1, z=1.),'camera':dict(eye=dict(x=1.1, y=1.98, z=0.66))})
         fig.write_html(self.rootFile + 'solutions/plots/3Dview_' + self.fileName +'.html', include_mathjax="cdn")
         del fig
+    def get_no_encroachment_data(self):
+        '''
+        Find the (h0,c0) values where intrusion_mass = 0. 
+        That is, find the 0 level-set of intrusion_mass.
+        This is meant to identify an (h0,c0) pair where no encroachment occurs, so I stored this as a dictionary, like a look up table.
+        '''
+        print('\n!!!  This will return a dictionary with the key being c0 and the value being h0, i.e., no_encroachment[c0]=h0  !!! \n')
+        C2_below_1 = np.round(self.C2[:np.argwhere(self.C2<=1)[-1][0]+1],2)
+        self.no_encroachment = {}
+        for i in range(len(C2_below_1)):
+            p_idx = np.argwhere(self.intrusion_mass[i,:]>0)[-1][0] # p_idx is for positive index, the last positive value. This is dependent on the intrustion mass being a descending function of initial height for a fixed initial c. 
+            self.no_encroachment[C2_below_1[i]] = np.round((self.H2[p_idx]+self.H2[p_idx+1])/2,2)
 
 def make_deposition_plots(US=[0.005,0.01,0.015]):
     '''
@@ -848,1302 +1414,193 @@ def collision_details(u_s,rootFile,N=5000,sharp=50):
     plt.show()
     plt.rcParams.update({"text.usetex":False})
 
+def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0,T=40.0,apart = 5, FrSquared = 2.828, plot_=True):
+    def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max):
+        plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
+        plt.figure(figsize = [6,5])
 
+        for x,y,par in zip(X,Y,par_list):
+            idx = np.where(x>x_Min)[0]
+            x = x[idx]
+            y = y[idx]
+            idx = np.where(x<x_Max)[0]
+            x = x[idx]
+            y = y[idx]
 
+            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par) 
+            plt.plot(x,y,label = str_label)
+        plt.xlabel('$x$')
+        plt.ylabel(variable_y_label)
+        plt.legend()
 
+        plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
+        plt.close()
+        plt.rcParams.update({"text.usetex":False})
 
+    def print_latex_table(var,label,M):
+        print('')
+        label.append(77)
+        M = np.vstack((np.array(label),M))
+        l = ['S','u_-','u_+','h_-','h_+']
+        l.insert(0,var)
+        rows,cols = M.shape
+        for i in range(rows):
+            string_ = '        $'+l[i]+'$'
+            for j in range(cols):
+                string_ += ' & %s'%('\\%') if i==0 and j == M.shape[1]-1 else ' & %0.6f '%M[i,j]
+            string_ += '\\\\'
+            if i==0:
+                string_ += ' \\hline'
+            print(string_)
+        print('')
+    def NumericalValidation_NuRe(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
+        par_list = [250,500,1000,2000]
+        par_matrix = np.zeros((5,len(par_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0 
+        H_plot = []
+        U_plot = []
+        X_plot = []
 
+        for i in range(len(par_list)):
+            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200)
+            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
 
+            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+                par_matrix[j,i] = val
+            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)
+            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)[-1]
+            X_plot.append(x)
+            H_plot.append(H[-1,1:])
+            U_plot.append(U[-1,1:])
 
+        plot_numer(X_plot,H_plot,'Reynolds','\\textrm{Re}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table('\\Rey', par_list, par_matrix)
+        return par_matrix 
 
+    def NumericalValidation_CFL(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
+        par_list = [0.4,0.2,0.1,0.05]
+        par_matrix = np.zeros((5,len(par_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0 
+        H_plot = []
+        U_plot = []
+        X_plot = []
 
+        for i in range(len(par_list)):
+            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200)
+            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
 
+            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+                par_matrix[j,i] = val
+            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200,T=T)
+            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200,T=T)[-1]
+            X_plot.append(x)
+            H_plot.append(H[-1,1:])
+            U_plot.append(U[-1,1:])
 
+        plot_numer(X_plot,H_plot,'CFL','\\Lambda','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        plot_numer(X_plot,U_plot,'CFL','\\Lambda','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table('\\Lambda', par_list, par_matrix)
+        return par_matrix 
+    def NumericalValidation_Sharp(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
+        par_list = [50,100,200,400]
+        par_matrix = np.zeros((5,len(par_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0 
+        H_plot = []
+        U_plot = []
+        X_plot = []
 
+        for i in range(len(par_list)):
+            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe ,CFL=0.1,sharp=par_list[i])
+            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
 
+            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+                par_matrix[j,i] = val
+            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=par_list[i],T=T)
+            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=par_list[i],T=T)[-1]
+            X_plot.append(x)
+            H_plot.append(H[-1,1:])
+            U_plot.append(U[-1,1:])
 
+        plot_numer(X_plot,H_plot,'Sharp','\\sigma','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        plot_numer(X_plot,U_plot,'Sharp','\\sigma','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table('\\sigma', par_list, par_matrix)
+        return par_matrix 
 
+    def NumericalValidation_hmin(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
+        par_list = [0.0004,0.0002,0.0001,0.00005]
+        par_matrix = np.zeros((5,len(par_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0 
+        H_plot = []
+        U_plot = []
+        X_plot = []
 
+        for i in range(len(par_list)):
+            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = 1000,CFL=0.1,sharp=200)
+            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
 
+            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+                par_matrix[j,i] = val
+            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = NuRe,CFL=0.1,sharp=200,T=T)
+            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = NuRe,CFL=0.1,sharp=200,T=T)[-1]
+            X_plot.append(x)
+            H_plot.append(H[-1,1:])
+            U_plot.append(U[-1,1:])
 
-#def plotTimeT(x,u,t,time):
-#    i = np.abs(t-time).argmin()
-#    plt.plot(x,u[i,:],label = '$t = %0.1f$'%time)
-#
-#def plotTimeT_xRange(x,u,t,time,xmin,xmax):
-#    i = np.abs(t-time).argmin()
-#    ix = np.array([x>3,x<4]).all(axis=0)
-#    plt.plot(x,u[i,:],label = 't = %0.1f'%time)
-#    
-#def plotMultTimes(rootFile = 'ShallowWaterSimulations/' ,rootFileName = 'BoxIC_NumericalValidation_',N=4000,T=20.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.01):
-#    details = buildFileName(N, T, h_min, NuRe, NuPe, FrSquared, U_s)
-#    SWEFiles = [rootFileName + s + details for s in ['h','u','c']]
-#    SWELegend = ['height','velocity','concentration']
-#    subplotcounter = 0
-#    fig = plt.figure(figsize = [20,6])
-#    for filename,leg in zip(SWEFiles,SWELegend):
-#        subplotcounter+=1
-#        x,t,u = unpack(rootFile + filename)
-#        plt.subplot(1,3,subplotcounter)
-#        for time in [0,3,6,9,12,15,18]:
-#            plotTimeT(x,u,t,time)
-#        plt.legend()
-#        plt.ylabel(leg)
-#        plt.xlabel('x')
-#    fig.suptitle('N = %i, h_min = %0.03f, NuRe = NuPe = %i, FrSquared = %i, U_x = %0.3f'%(N,h_min,NuRe, FrSquared, U_s))
-#    filename = rootFile + 'solutions/plots/' + rootFileName + details
-#    plt.savefig(filename.replace('.','_') + '.pdf')
-#    plt.close()
-#    
-#def find_zero_center_out(x,y):
-#    N = int(len(x)/2)
-#    i = 1
-#    while y[N-i]*y[N+i]>0:
-#        i+=1
-#    if y[N+i]*y[N+i-1]<0:
-#       lo,up = N+i-1,N+i
-#    elif y[N-i]*y[N-i+1]<0:
-#       lo,up = N-i,N-i+1
-#    else: 
-#        print('Error in finding root')
-#    return x[up] - (x[lo]-x[up])/(y[lo]-y[up])*y[up]
-#
-#def heap_comp_individual(rootFile = 'Sep19/' ,rootFileName = '',N=16000,T=30.0,TSep=None,NSep=None,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2.828,U_s=0.020,h1init=1.0,h2init=0.7,c1init=1.0,c2init=0.7,apart=5.0,sharp=200,show = False,CFL=0.1, save = True, NoInteractionAnalysis = False,show_legend=False,title = False,forArticle = False):
-#    details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s,h1init=h1init,h2init=h2init,c1init=c1init,c2init=c2init,apart=apart,sharp=sharp,CFL=CFL)
-#    d1 = unpack(rootFile + rootFileName + details + '/d1')[-1]
-#    x,T,d2 = unpack(rootFile + rootFileName + details + '/d2')
-#
-#    d=d1[-1,:]+d2[-1,:]
-#
-#    #for i in range(len(T)):
-#    #    plt.plot(x,d1[i,:]-d2[i,:],label = 't=%0.2f'%T[i])
-#    #plt.legend()
-#    #plt.show()
-#    equal_conc_point = find_zero_center_out(x,d1[-1,:]-d2[-1,:]) 
-#
-#    r = equal_conc_point
-#    coll_idx = np.argmin(np.abs(T-3))
-#    D1 = d1[-1,:]-d1[coll_idx,:]
-#    D2 = d2[-1,:]-d2[coll_idx,:]
-#    plt.close()
-#    plt.plot(x,D1)
-#    plt.plot(x,D2)
-#    plt.plot(x,d1[-1,:])
-#    plt.plot(x,d2[-1,:])
-#    plt.plot([r,r],[0,.1])
-#    plt.xlim([-20,20])
-#    plt.show()
-#
-#    left_max = np.max(d[x<0])
-#    right_max = np.max(d[x>=0])
-#    max_loc = x[np.argmax(d)]
-#    return left_max, right_max, right_max/left_max, right_max-left_max, max_loc, equal_conc_point
-#
-##heap_comp_individual(rootFile = 'SedimentationInitialConditionTest_2025Apr25/',N=5000,CFL=0.1,U_s=0.010,T=40.,sharp=50)
-#
-#def heap_comp(H2 = np.linspace(0.7,0.97,10),C2 = np.linspace(0.7,0.97,10),rootFile = 'Sep17_loopy/' ,rootFileName = '',N=16000,T=30.0,TSep=None,NSep=None,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2.828,U_s=0.010,h1init=1.0,h2init=0.7,c1init=1.0,c2init=0.7,apart=5.0,sharp=50,show = False,CFL=0.1, save = True, NoInteractionAnalysis = False,show_legend=False,title = False,forArticle = False):
-#    H_mesh,C_mesh=np.meshgrid(H2,C2)
-#    heap_mesh = H_mesh*0.
-#    rel_mesh = H_mesh*0.
-#    eq_conc_mesh = H_mesh*0.
-#    for i,h2 in enumerate(H2):
-#        for j,c2 in enumerate(C2):
-#            
-#            rel, loc, eq_conc = heap_comp_individual(rootFile = rootFile,rootFileName = rootFileName,N=N,T=T,TSep=TSep,NSep=NSep,h_min=h_min,NuRe=NuRe,NuPe=NuPe,FrSquared=FrSquared,U_s=U_s,h1init=h1init,h2init=h2,c1init=c1init,c2init=c2,apart=apart,sharp=sharp,show = show,CFL=CFL, save = save, NoInteractionAnalysis = NoInteractionAnalysis,show_legend=show_legend,title = show_legend,forArticle = forArticle)[-3:]
-#            heap_mesh[j,i]=loc
-#            rel_mesh[j,i]=rel
-#            eq_conc_mesh[j,i]=eq_conc
-#    plt.subplot(131)
-#    fig=plt.pcolormesh(H_mesh,C_mesh,heap_mesh)
-#    #fig=plt.pcolormesh(H_mesh,C_mesh,heap_mesh,shading = 'gouraud')
-#    #plt.plot(H2,1/H2)
-#    plt.colorbar(fig)
-#    plt.xlabel('h2')
-#    plt.ylabel('c2')
-#
-#    plt.subplot(132)
-#    #fig=plt.pcolormesh(H_mesh,C_mesh,rel_mesh)
-#    fig=plt.pcolormesh(H_mesh,C_mesh,rel_mesh,shading = 'gouraud')
-#    plt.plot(H2,0.7*0.97/H2)
-#    plt.colorbar(fig)
-#    plt.xlabel('h2')
-#    plt.ylabel('c2')
-#
-#    plt.subplot(133)
-#    #fig=plt.pcolormesh(H_mesh,C_mesh,rel_mesh)
-#    fig=plt.pcolormesh(H_mesh,C_mesh,eq_conc_mesh,shading = 'gouraud')
-#    plt.plot(H2,0.7*0.97/H2)
-#    plt.colorbar(fig)
-#    plt.xlabel('h2')
-#    plt.ylabel('c2')
-#
-#    plt.show()
-##heap_comp(rootFile = 'SedimentationInitialConditionTest_2025Apr25/',N=5000,CFL=0.1,U_s=0.010,T=40.)
-#
-#def new_sediment(rootFile = 'Sep17_loopy/' ,rootFileName = '',N=16000,T=30.0,TSep=None,NSep=None,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2.828,U_s=0.020,h1init=1.0,h2init=0.7,c1init=1.0,c2init=0.7,apart=5.0,sharp=200,show = False,CFL=0.1, save = True, NoInteractionAnalysis = False,show_legend=False,title = False,forArticle = False):
-#    details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s,h1init=h1init,h2init=h2init,c1init=c1init,c2init=c2init,apart=apart,sharp=sharp,CFL=CFL)
-#    d1 = unpack(rootFile + rootFileName + details + '/d1')[-1]
-#    x,T,d2 = unpack(rootFile + rootFileName + details + '/d2')
-#
-#    t_legend=[]
-#    d1d2_old = d1[0,:]*0
-#    if forArticle:
-#        plt.rcParams.update({"text.usetex":True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"],'font.size':12,'legend.fontsize':10,'lines.linewidth':0.5,'legend.fontsize':12,'xtick.labelsize':10,'ytick.labelsize':10})
-#        plt.figure(figsize = [5*1.3,1.73*1.1])
-#    for i,t in enumerate(T):
-#        if i%4==0 and i>0:
-#            dminus = d1[4,:]-d2[4,:]
-#            polygon = plt.fill_between(x, d1d2_old, d1[i,:] + d2[i,:]-dminus, lw=1, color='none')
-#            #ylim = plt.ylim()
-#            verts = np.vstack([p.vertices for p in polygon.get_paths()])
-#            gradient = plt.imshow(np.reshape((d1[i,:]-d1[4,:])/(d1[i,:]+d2[i,:]-dminus),(1,-1)), cmap='PRGn', aspect='auto',extent=[verts[:, 0].min(), verts[:, 0].max(), verts[:, 1].min(), verts[:, 1].max()])
-#            gradient.set_clip_path(polygon.get_paths()[0], transform=plt.gca().transData)
-#            #plt.ylim(ylim)
-#            #plt.plot(x,d1[-1,:],color='k')
-#            #plt.plot(x,d2[-1,:],color='k')
-#            plt.plot(x,d1[i,:]+d2[i,:],color='k')
-#            #        plt.plot(x,d1[i,:]+d2[i,:],label='t=%0.1f'%t)
-#            #plt.legend()
-#            d1d2_old = d1[i,:]+d2[i,:]
-#            t_legend.append("t=%0.1f"%t)
-#    t_legend.reverse()
-#    plt.legend(t_legend,labelspacing=0)
-#    cbar=plt.colorbar(gradient)
-#    cbar.set_ticks(ticks=[0,1])
-#    cbar.ax.set_yticklabels(['$100\%\ c_r$','$100\%\ c_{\ell}$'])
-#    plt.xlim([-10,10])
-#    if forArticle:
-#        plt.subplots_adjust(bottom = 0.12, left = 0.07, top = 0.952, right = 1.03)
-#    filename =  'solutions/plots/post_collition_h1_%0.2f_h2_%0.2f_c1_%0.2f_c2_%0.2f'%(h1init,h2init,c1init,c2init)
-#    plt.savefig(rootFile + filename.replace('.','_') + '.png',dpi =800)
-#    #plt.show()
-#    plt.close()
-#
-##for c2 in np.linspace(0.7,0.97,10):
-##    for h2 in np.linspace(0.7,0.97,10):
-##for c2 in [0.7,0.97]:
-##    for h2 in [0.7,0.97]:
-##        new_sediment(forArticle=True,h1init=0.0,h2init=h2,c1init=0.0,c2init=c2,N=2000,sharp = 50)
-#
-#def sediment(rootFile = 'ResearchStatement/' ,rootFileName = '',N=16000,T=30.0,TSep=None,NSep=None,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2.828,U_s=0.020,h1init=None,h2init=None,c1init=None,c2init=None,apart=None,sharp=200,show = False,CFL=0.1, save = True, NoInteractionAnalysis = False,show_legend=False,title = False,forArticle = False):
-#    if not TSep:
-#        TSep = T
-#    if not NSep:
-#        NSep = N
-#    print('sediment:', ' c1=',c1init,' c2=',c2init,' h1=',h1init,'\n')
-#    if NoInteractionAnalysis:
-#        details = buildFileName(NSep, TSep, h_min, NuRe, FrSquared, U_s,h1init=h1init,h2init=0.0,c1init=c1init,c2init=0.0,apart=apart,sharp=sharp,CFL=CFL)
-#        print(details)
-#        xSep,_,h = unpack(rootFile + rootFileName + details + '/h')
-#        H1_NO = h
-#        temp = unpack(rootFile + rootFileName + details + '/phi1')[-1]
-#        C1_NoInteraction = temp/h
-#        details = buildFileName(NSep, TSep, h_min, NuRe, FrSquared, U_s,h1init=0.0,h2init=h2init,c1init=0.0,c2init=c2init,apart=apart,sharp=sharp,CFL=CFL)
-#        print(details)
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        temp = unpack(rootFile + rootFileName + details + '/phi2')[-1]
-#        C2_NoInteraction = temp/h
-#        H2_NO = h
-#        C_NoInteraction = C1_NoInteraction+C2_NoInteraction 
-#        d_NoInteraction = C_NoInteraction[0,:]*0
-#        D_NoInteraction = []
-#    details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s,h1init=h1init,h2init=h2init,c1init=c1init,c2init=c2init,apart=apart,sharp=sharp,CFL=CFL)
-#    h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#    x,T,temp = unpack(rootFile + rootFileName + details + '/phi1')
-#    C1 = temp/h
-#    temp = unpack(rootFile + rootFileName + details + '/phi2')[-1]
-#    C2 = temp/h
-#    
-#
-#    d1 = C1[0,:]*0
-#    d2 = C2[0,:]*0
-#    dt = T[1]-T[0]
-#    colorcounter = 0
-#    if forArticle:
-#        plt.rcParams.update({"text.usetex":True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"],'font.size':12,'legend.fontsize':12,'lines.linewidth':0.5,'legend.fontsize':12,'xtick.labelsize':10,'ytick.labelsize':10})
-#        plt.figure(figsize = [5*1.3,1.73*1.1])
-#    else:
-#        plt.figure(figsize = [15*1.3,4*1.3])
-#    D1 = []
-#    D2 = []
-#    Tplot = []
-#    print('running loop')
-#    
-#    if T[-1] == T[-2]:
-#        T = T[:-1]
-#    for i,t in enumerate(T):
-#        d1 += dt*U_s*C1[i,:]
-#        d2 += dt*U_s*C2[i,:]
-#        if NoInteractionAnalysis and t<TSep:
-#            d_NoInteraction += dt*U_s*C_NoInteraction[i,:]
-#        if abs(t%5)<dt/2 and t>0:
-#            D1.append(deepcopy(d1))
-#            D2.append(deepcopy(d2))
-#            if NoInteractionAnalysis:
-#                D_NoInteraction.append(deepcopy(d_NoInteraction))
-#            Tplot.append(t)
-#    #plt.show()
-#    print('loop complete')
-#    if NoInteractionAnalysis:
-#        D_NoInteraction.reverse()
-#    D2.reverse()
-#    D1.reverse()
-#    Tplot.reverse()
-#    print(Tplot)
-#    opac = 1
-#    d_opac = (opac-0.2)/len(Tplot)
-#    print('start plotting')
-#    for i in range(len(Tplot)):
-#        d1 = D1[i]
-#        d2 = D2[i]
-#        t = Tplot[i]
-#        d2layered = d1+d2
-#        if show_legend:
-#            plt.fill_between(x,d1+d2,facecolor = (0.7517*opac,0.7517*opac,0.7517*opac), edgecolor = (0,0,0,1),linewidth = 0.75,label = '%0.2f'%t)
-#        plt.fill_between(x[d1>0],d1[d1>0],facecolor = (0.5803*opac,0.4040*opac,0.7412*opac), edgecolor = (0,0,0,1),linewidth = 2)
-#        plt.fill_between(x[d2>0],d2layered[d2>0],y2 = d1[d2>0],facecolor = (1*opac,0.4980*opac,0.0549*opac), edgecolor = (0,0,0,1),linewidth = 1)
-#        if NoInteractionAnalysis and t < TSep:
-#             if forArticle:
-#                 plt.plot(xSep,D_NoInteraction[i], color = (0,0.569,0.702),linewidth=1.5)
-#             else:
-#                 plt.plot(xSep,D_NoInteraction[i], color = (0,0.569,0.702),linewidth=3)
-#        colorcounter+=1
-#        opac -= d_opac
-#        print(i)
-#    print('plotting complete')
-#    #plt.xlim((x[D1[0]>0][0],x[D2[0]>0][-1]))
-#    plt.xlim((-10,10))
-#    if title: plt.title('Sediment Deposition Patterns: c1=%0.1f, c2=%0.1f, h1=%0.1f, h2=%0.1f'%(c1init,c2init,h1init,h2init))
-#    if forArticle:
-#        plt.subplots_adjust(bottom = 0.12, left = 0.07, top = 0.99, right = .97)
-#
-#    if show_legend:
-#        plt.legend()
-#    if save:
-#        print('save plot\n')
-#        if NoInteractionAnalysis:
-#            filename = 'layeredSedimentDepositsWithNoInteraction_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f_T%0.1f'%(c1init,c2init,h1init,h2init,TSep)
-#        else:
-#            filename = 'layeredSedimentDeposits_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f_T%0.1f'%(c1init,c2init,h1init,h2init,TSep)
-#        plt.savefig(rootFile + 'solutions/plots/sediments/' + filename.replace('.','_') + '.pdf')
-#        if not save: plt.close()
-#    if show: plt.show()
-#
-#
-#def runViscNonSymBurgers():
-#    List = ['viscous_nonsymmetric_N1000_T4_nu_0_0','viscous_nonsymmetric_N1000_T4_nu_0_001','viscous_nonsymmetric_N1000_T4_nu_0_01','viscous_nonsymmetric_N1000_T4_nu_0_1']
-#    Leg = ['nu = 0','nu = 0.001','nu = 0.01','nu = 0.1']
-#    makeMP4withMultFiles(rootFile = 'Burgers/',filelist = List,Legend=Leg, SAVE = True)
-#
-#def avg_cell(x,u,t):
-#    # u is a function, not a vector.
-#    N = x.size + 1 # Number of nodes
-#    u_avg = np.empty((N-1))
-#    deltax=x[2]-x[1]
-#    x = x - deltax/2
-#    x = np.hstack((x,np.array([x[-1]+deltax]))) # Recreate nodes from cell midpoints
-#    for j in np.arange(0,N-1):
-#        # Make sure cell averaging is consistent with how the initial condition is averaged over every cell.
-#        #u_avg[j] = np.dot(u(xg*deltax/2+(x[j]+x[j+1])/2,t),wg) 
-#        u_avg[j] = (u(x[j],t) + u(x[j+1],t))/2
-#    return u_avg
-#
-#def ErrorAnalysisWithTrueSolution():
-#    """
-#    Here is the error analysis for the test problem u_t + u_x = 0, -1<x<=1, t>0
-#    The true solution is u(x,t) = exp(sin(pi(x-t)))
-#    The initial condition is u(x,0)
-#    """
-#    rootFile = "Transport/"
-#    
-#    def true_soln(x,t):
-#        return np.exp(np.sin(np.pi*(x-t)))
-#
-#    #N = range(60,220,20)
-#    N = [40,60,80,100,120,140,160,180,200,300,400,500,600,700,800,900,1000]
-#    for T in [0.5,1,1.5,2]:
-#        E = []
-#        for n in N:
-#            x,t,u = unpack(rootFile + "exp_sin_pi_x_RK3_N" + str(n) + "_T2")
-#            print(u.shape)
-#            dx = x[1]-x[0]
-#            index = np.argmin(np.abs(t-T))
-#            t = t[index]
-#            u = u[index,:]
-#            u_ = avg_cell(x,true_soln,t) # Cell averaged "exact" solution.
-#            E.append(dx*np.sum(np.abs(u-u_)))
-#        P = np.polyfit(np.log(N),np.log(E),1)
-#        plt.loglog(N,E,marker='s',label = 't = %0.2f, ROC: %0.2f'%(T,P[0]))
-#    plt.legend()
-#    plt.title('$u_t+u_x=0$, exact: $u(x,t) = \exp(\sin(\pi(x-t)))$')
-#    plt.xlabel('N nodes')
-#    plt.ylabel('$L^1$ error')
-#    plt.show()
-#
-#def fronts(whichfile, timecutoff = 10000000, tolerance = 1e-1, rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BoxICs_',N=8000,T=30.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.01):
-#    """
-#    Use the cutoff idea to plot the fronts of the waves
-#    """
-#    details = buildFileName(N, T, h_min, NuRe, NuPe, FrSquared, U_s)
-#    SWEFiles = rootFile + rootFileName + whichfile + details
-#    x,t,u = unpack(SWEFiles)
-#    LeftFront = []
-#    RightFront = []
-#    for i,c in zip(t,u): 
-#        if i>timecutoff: break
-#        print(i)
-#        LeftFront.append(x[np.argwhere(c>tolerance)[0,0]]) # Find the first value where the variable of interest (c) is about the cutoff
-#        RightFront.append(x[np.argwhere(c>tolerance)[-1,0]]) # Find the last value where the variable of interest (c) is about the cutoff
-#    idx =  np.argwhere(t<timecutoff)[:,0] #If you cutoff the time values, you only want the relative information in t and u returned.
-#    return x, t[idx], u[idx,:], np.array(LeftFront), np.array(RightFront)
-#
-#def plotFronts(var= 'c',timecutoff = 20, tolerance = 1e-4, rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BigBoxLittleBox_',N=8000,T=30.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.01,show = True,linestyle = 'solid',color = 'red'):
-#    x,t,c1,c1Left, c1Right = fronts(var + '1',tolerance = tolerance, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#    x,t,c2,c2Left, c2Right = fronts(var + '2', tolerance = tolerance, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#    #plt.plot(t,c1Right)
-#    #plt.plot(t,c2Left)
-#    #plt.figure()
-#    plt.plot(t,c1Right,color = color,linestyle =  'solid')
-#    plt.plot(t,c1Left, color = color,linestyle =  'solid')
-#    plt.plot(t,c2Right,color= color,linestyle = 'dashed')
-#    plt.plot(t,c2Left,color = color,linestyle = 'dashed')
-#    
-#    if show: plt.show()
-#
-#def fronts_vs_Num(NuRe, NuPe, timecutoff = 20, tolerance = 1e-4, rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BigBoxLittleBox_',N=8000,T=30.0,h_min=0.001,FrSquared=2,U_s=0.01,show = True): 
-#
-#    color = ['red','blue','black','green','purple','orange']
-#    for nR,nP,c in zip(NuRe,NuPe,color[:len(NuRe)]):
-#        plotFronts(timecutoff = 30.0, rootFileName = rootFileName, U_s = U_s, tolerance = tolerance,rootFile = rootFile, T = T, h_min = h_min, FrSquared = FrSquared, NuRe = nR, NuPe = nP, color = c,show = False)
-#
-#    leg = plt.legend(NuRe)
-# 
-#    for i,j in enumerate(leg.legendHandles):
-#        j.set_color(color[i])
-#        j.set_linestyle('solid')
-#    plt.show()
-##fronts_vs_Num(NuRe=[62,125,250,500], NuPe=[62,125,250,500],rootFileName = 'BigBoxLittleBox_NuRePeTest_',U_s = 0.0)
-#
-#
-#def trapz(x,f):
-#    """
-#    Trapezoidal rule to compute average value between the fronts
-#
-#    This does the average as well, not just the integration, see the division by (x[-1]-x[0]) in the return statement
-#    """
-#    dx = x[1]-x[0]
-#    F = 0 
-#    for i in range(len(x)-1): 
-#        F += dx*(f[i]+f[i+1])/2
-#    return F/(x[-1]-x[0]) 
-#
-#def boxify(whichfile, timecutoff = 1000000000, tolerance = 1e-4, rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BigBoxLittleBox_',N=8000,T=30.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.01):
-#    x, time, C, cLeft, cRight = fronts(whichfile,tolerance = tolerance, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#    box = []
-#    for c,cl,cr in zip(C, cLeft, cRight):
-#        indeces = np.argwhere(np.all([list(x>=cl),list(x<=cr)],axis=0))[:,0]
-#        box.append(trapz(x[indeces],c[indeces]))
-#    return time, np.array(box), cLeft, cRight
-#
-#def boxifiedData(timecutoff = 20, tolerance = 1e-4, rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BigBoxLittleBox_',N=8000,T=30.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.00):
-#    t, b1, cl1, cr1 = boxify('c1',tolerance = tolerance, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#    t, b2, cl2, cr2 = boxify('c2',tolerance = tolerance, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#    Filename = buildFileName(N, min(timecutoff,T), h_min, NuRe, NuPe, FrSquared, U_s)
-#    np.savetxt(rootFile + 'solutions/TwoBoxifiedData1' + Filename + '_tolerance%0.6f'%tolerance + '.txt',np.array([t,b1,cl1,cr1,b2,cl2,cr2]).T)
-#
-#def tolSensAvgConc(whichfile,timecutoff = 30,rootFile = 'TwoCurrentShallowWaterSimulations/' ,rootFileName = 'BigBoxLittleBox_',N=8000,T=30.0,h_min=0.001,NuRe=250,NuPe=250,FrSquared=2,U_s=0.00):
-#    TOL = [1e-3,1e-4,1e-5,1e-6]
-#    #TOL = [0.0]
-#    for tol in TOL:
-#        t, b1, cl1, cr1 = boxify(whichfile,tolerance = tol, timecutoff=timecutoff,rootFileName = rootFileName, N = N, T = T, h_min = h_min, NuRe = NuRe, NuPe = NuPe, FrSquared = FrSquared, U_s = U_s)
-#        plt.plot(t,b1,label=tol)
-#    plt.legend()
-#
-#    
-#def tolSens():
-#    TOL = [1e-4,1e-4,1e-5,1e-5,1e-6,1e-6]
-#    var = ['c','phi','c','phi','c','phi']
-#    color = ['red','blue','black','green','purple','orange']
-#    Lege = []
-#    for t,v,c in zip(TOL,var,color[:len(TOL)]):
-#        plotFronts(var = v, timecutoff = 30.0, rootFileName = 'SmoothICs_', U_s = 0.0, tolerance = t, color = c,show = False)
-#        Lege.append(v + ', %0.6f'%t)
-#
-#
-#    leg = plt.legend(Lege)
-# 
-#    for i,j in enumerate(leg.legendHandles):
-#        j.set_color(color[i])
-#        j.set_linestyle('solid')
-#
-#    plt.show()
-#
-#def oldVsNew(whichfile, N=500,T=2.0, h_min = 0.0001, NuRe = 2000, FrSquared = 2, U_s = 0.00):
-#    """
-#    Run the old versus new code and plot the final time to check new code.
-#    """
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s)
-#    xnew,tnew,unew = unpack('TwoCurrentShallowWaterSimulations/Sep12Test_' + whichfile + details)
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s)
-#    xold,told,uold = unpack('TwoCurrentShallowWaterSimulations/Sep12TestOLD_' + whichfile + details)
-#    plt.plot(xnew,unew[-1,:],label = 'new')
-#    plt.plot(xold,uold[-1,:],label = 'old',linestyle = 'dashed')
-#    plt.title(whichfile)
-#    plt.legend()
-#
-#def oldVsNewAll():
-#    plt.subplot(221)
-#    oldVsNew('u')
-#    plt.subplot(222)
-#    oldVsNew('h')
-#    plt.subplot(223)
-#    oldVsNew('c1')
-#    plt.subplot(224)
-#    oldVsNew('c2')
-#    plt.show()
-#
-#def plot_time(T,x,t,u,label):
-#    index = np.argmin(np.abs(t-T))
-#    plt.plot(x,u[index,:],label = label)
-#    
-#def plot_timenearfront(T,x,t,u,label):
-#    index = np.argmin(np.abs(t-T))
-#    U = u[index,:]
-#    FRONT = x[np.argwhere(U>U[-2])[-1][0]]
-#    idx = np.argwhere(np.all([x>FRONT-1,x<FRONT+1],axis=0))
-#    plt.plot(x[idx],U[idx],label = label)
-#
-#def nearfront(T,x,t,u):
-#    index = np.argmin(np.abs(t-T))
-#    U = u[index,:]
-#    FRONT = x[np.argwhere(U>U[-2])[-1][0]]
-#    idx = np.argwhere(np.all([x>FRONT-1,x<FRONT+1],axis=0))
-#    return x[idx],U[idx]
-#
-#def max_versus_h_min(whichfile = 'h', n = 5,U_s = 0.0,NuRe= 1000):
-#    h_min=[0.00006,0.00007,0.00008,0.00009,0.0001,0.0002,0.0003,0.0004,0.0005,0.0006,0.0007,0.0008,0.0009,0.001]
-#    maxh = []
-#    for h in h_min:
-#        details = buildFileName(N=1000, T=20.0, h_min=h, NuRe=NuRe, FrSquared=2, U_s=U_s)
-#        x,t,u = unpack('h_min_test/Sep29_' + whichfile + details)
-#        Xx,U = nearfront(10,x,t,u)
-#        maxh.append(np.max(U))
-#    
-#    plt.plot(h_min,maxh,marker = 'd')
-#    #plt.savefig('h_min_test/plots/h_versus_maxloglog.pdf')
-#    p = np.polyfit(maxh,h_min,2)
-#    #p3 = np.polyfit(h_min,maxh,3)
-#    #p4 = np.polyfit(h_min,maxh,4)
-#    x = np.linspace(1.03,1.25)
-#    plt.plot(p[0]*x**2 + p[1]*x + p[2],x,linestyle = 'dashed')
-#    plt.show()
-#
-#def test_h_min(h_min,whichfile = 'h', n = 5,U_s = 0.0,NuRe= 1000):
-#    """
-#    Plot the solution for n evenly spaced points in time
-#    """
-#    plt.figure(figsize = [12,10])
-#    for h in h_min:
-#        details = buildFileName(N=1000, T=20.0, h_min=h, NuRe=NuRe, FrSquared=2, U_s=U_s)
-#        x,t,u = unpack('h_min_test/Sep29_' + whichfile + details)
-#        plt.subplot(211)
-#        plot_time(10,x,t,u,label = 'hm = %0.5f'%h)
-#        plt.title(variable_dict[whichfile[0]] + ', time = %0.2f'%10)
-#        plt.legend()
-#        plt.subplot(212)
-#        plot_time(20,x,t,u,label = 'hm = %0.5f'%h)
-#        plt.title(variable_dict[whichfile[0]] + ', time = %0.2f'%20)
-#        plt.legend()
-#
-#def test_h_min_nearfront(h_min,whichfile = 'h', n = 5,U_s = 0.0,NuRe= 1000):
-#    """
-#    Plot the solution for n evenly spaced points in time
-#    """
-#    plt.figure(figsize = [12,10])
-#    for h in h_min:
-#        details = buildFileName(N=1000, T=20.0, h_min=h, NuRe=NuRe, FrSquared=2, U_s=U_s)
-#        x,t,u = unpack('h_min_test/Sep29_' + whichfile + details)
-#        plt.subplot(211)
-#        plot_timenearfront(10,x,t,u,label = 'hm = %0.5f'%h)
-#        plt.title(variable_dict[whichfile[0]] + ', time = %0.2f'%10)
-#        plt.legend()
-#        plt.subplot(212)
-#        plot_timenearfront(20,x,t,u,label = 'hm = %0.5f'%h)
-#        plt.title(variable_dict[whichfile[0]] + ', time = %0.2f'%20)
-#        plt.legend()
-#
-#def example_timeplots(rootFile = 'TwoCurrentShallowWaterSimulations/InitialConditionTest/' ,rootFileName = '',N=5000,T = 15.0, whichfile = 'c1', n = 5,U_s = 0.00,h_min=0.0001,NuRe= 1000,FrSquared = 2,c1init = None, c2init = None, h1init = None, h2init = None, Nt =None, Ts = 0,linestyle = 'solid',show_legend = True,apart = 5, CFL=0.1,sharp = 50):
-#    """
-#    Plot the solution for n evenly spaced points in time
-#    """
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s,h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init, apart=apart, CFL=CFL, sharp=sharp)
-#    if whichfile == 'u':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/q')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        u = temp/h
-#    elif whichfile == 'c1':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/phi1')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        u = temp/h
-#    elif whichfile == 'c2':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/phi2')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        u = temp/h
-#    else:
-#        x,t,u = unpack(rootFile + rootFileName + details + '/' + whichfile)
-#    print(rootFile + rootFileName + whichfile + details)
-#  
-#    if not Nt:
-#        Nt = len(t)
-#    else:
-#        Nt = sum(t<=Nt)
-#    Ns = np.argmin(np.abs(t-Ts))
-#    j = Ns
-#    counter = 0
-#    while j<=Nt:
-#        plt.plot(x,u[j,:], label = 't = %0.1f'%t[j],linestyle = linestyle,color = tabcolors[counter])
-#        if whichfile[0] == 'c':
-#            plt.ylim((0,1))
-#        plt.title(variable_dict[whichfile])
-#        #plt.xlabel('x')
-#        j+=int((Nt-Ns)/n)
-#        counter+=1
-#    if show_legend:
-#        plt.legend()
-#    #plt.show()
-#
-#def analyze_solutions(rootFile='TwoCurrentShallowWaterSimulations/InitialConditionTest/', rootFileName='Separated_', N=5000, T=15.0, U_s=0.02, h_min=0.0001, NuRe=1000, FrSquared=2, c1init=None, c2init=None, h1init=None, h2init=None, linestyle = 'solid'):
-#    """
-#    Plot the solution for n evenly spaced points in time
-#    """
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s,h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init)
-#    x,t,h = unpack(rootFile + rootFileName + 'h' + details)
-#    q = unpack(rootFile + rootFileName + 'q' + details)[-1]
-#    #phi1 = unpack(rootFile + rootFileName + 'phi1' + details)[-1]
-#    #phi2 = unpack(rootFile + rootFileName + 'phi2' + details)[-1]
-#    u = q/h
-#    j=0
-#    while np.max(h[j,:]) >= np.max(h[j+1,:]):
-#        collision_time = t[j]
-#        collision_space_index = np.argmax(h[j+1,:]) 
-#        collision_loc = x[collision_space_index]
-#        collision_j = j
-#        j+=1
-#    momentum_spike = 0
-#    check_time = True
-#    while j <len(t):
-#        #momentum_spike = max(momentum_spike,np.max(h[j,:]))
-#        if np.max(h[j,:])>momentum_spike:
-#            momentum_spike = np.max(h[j,:])
-#            collision_space_index = np.argmax(h[j,:]) 
-#            collision_loc = x[collision_space_index]
-#        if t[j] > collision_time + 4 and check_time:
-#            cutoff_value = (3*h[j,collision_space_index] + h[j,np.argwhere(x>x[np.argwhere(h[j,:]>3*h_min)[-1]]-1)[0]])/4
-#            right_reflecting_wave_loc = x[np.argwhere(h[j,:]>cutoff_value)[-1]]
-#            check_time = False
-#        j+=1
-#    return collision_time, collision_loc, momentum_spike, right_reflecting_wave_loc[0]
-#
-#def RH_analysis(rootFile='TwoCurrentShallowWaterSimulations/InitialConditionTest/', rootFileName='Separated_', N=5000, T=15.0, U_s=0.00, h_min=0.0001, NuRe=1000, FrSquared=2, c1init=None, c2init=None, h1init=None, h2init=None, linestyle = 'solid',show = False, save = False):
-#    """
-#    Plot the solution for n evenly spaced points in time
-#    """
-#    print('RH:', ' c1=',c1init,' c2=',c2init,' h1=',h1init,'\n')
-#    def RH_h(hp,hm,up,um):
-#        return (hp*up - hm*um)/(hp-hm)
-#    def RH_u(hp,hm,up,um):
-#        return (hp*up*up + hp*hp/(2*FrSquared) - hm*um*um - hm*hm/(2*FrSquared))/(hp*up - hm*um)
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s,h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init)
-#    x,t,h = unpack(rootFile + rootFileName + 'h' + details)
-#    q = unpack(rootFile + rootFileName + 'q' + details)[-1]
-#    u = q/h
-#    j=0
-#    while np.max(h[j,:]) >= np.max(h[j+1,:]):
-#        collision_time = t[j]
-#        collision_space_index = np.argmax(h[j+1,:]) 
-#        collision_loc = x[collision_space_index]
-#        collision_j = j
-#        j+=1
-#    momentum_spike = 0
-#    R = []
-#    S_h = []
-#    S_u = []
-#    t_new = []
-#    while j <len(t):
-#        if np.max(h[j,:])>momentum_spike:
-#            momentum_spike = np.max(h[j,:])
-#            collision_space_index = np.argmax(h[j,:]) 
-#            collision_loc = x[collision_space_index]
-#            R=[]
-#            S_h = []
-#            S_u = []
-#            t_new = []
-#        if t[j] > collision_time+1.5:
-#            cutoff_value = (3*h[j,collision_space_index] + h[j,np.argwhere(x>x[np.argwhere(h[j,:]>3*h_min)[-1]]-1)[0]])/4
-#            reflect_wave_index =np.argwhere(h[j,:]>cutoff_value)[-1][0] 
-#            R.append(x[reflect_wave_index])
-#            hp = np.polyfit(x[reflect_wave_index+10:reflect_wave_index+30],u[j,reflect_wave_index+10:reflect_wave_index+30],0)[0]
-#            hm = np.polyfit(x[reflect_wave_index-30:reflect_wave_index-10],u[j,reflect_wave_index-30:reflect_wave_index-10],0)[0]
-#            hp = h[j,reflect_wave_index+10]
-#            hm = h[j,reflect_wave_index-10]
-#            polyright = np.polyfit(x[reflect_wave_index+10:reflect_wave_index+30],u[j,reflect_wave_index+10:reflect_wave_index+30],1)
-#            polyleft = np.polyfit(x[reflect_wave_index-30:reflect_wave_index-10],u[j,reflect_wave_index-30:reflect_wave_index-10],1)
-#            up = polyright[0]*x[reflect_wave_index] + polyright[1]
-#            um = polyleft[0]*x[reflect_wave_index] + polyleft[1]
-#            S_h.append(RH_h(hp,hm,up,um))
-#            S_u.append(RH_u(hp,hm,up,um))
-#            t_new.append(t[j])
-#        j+=1
-#    h_shock = R[0]
-#    H_shock = []
-#    u_shock = R[0]
-#    U_shock = []
-#    dt = t_new[1] - t_new[0]
-#    for ssh,ssu in zip(S_h,S_u):
-#        H_shock.append(h_shock)
-#        h_shock += dt*ssh
-#        U_shock.append(u_shock)
-#        u_shock += dt*ssu
-#    plt.figure(figsize=[6,4.5])
-#    plt.plot(t_new,R,label = 'front tracking',color = 'tab:blue')
-#    plt.plot(t_new,H_shock, label = 'S_h(t)',linestyle = 'dashed',color = 'tab:red')
-#    plt.plot(t_new,U_shock, label = 'S_u(t)',linestyle = '-.',color = 'tab:green')
-#    plt.title('c1=%0.1f, c2=%0.1f, h1=%0.1f, h2=%0.1f'%(c1init,c2init,h1init,h2init))
-#    plt.legend()
-#    if save:
-#        filename = 'reflectingWaveRH_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f'%(c1init,c2init,h1init,h2init)
-#        plt.savefig(rootFile + 'solutions/plots/RH/' + filename.replace('.','_') + '.pdf')
-#        if not show: plt.close()
-#    if show: plt.show()
-#
-#
-#def heatmap_analysis(rootFile='TwoCurrentShallowWaterSimulations/InitialConditionTest/', rootFileName='Separated_', N=5000, T=15.0, U_s=0.0, h_min=0.0001, NuRe=1000, FrSquared=2):
-#    conc1 = [0.7,0.8,0.9,1.0]
-#    conc2 = [0.7,0.8,0.9,1.0]
-#    height1 = [0.7,0.8,0.9,1.0]
-#    h2 = 1.0
-#    Collision_Time = np.zeros((len(conc1),len(conc2)))
-#    Collision_Loc = np.zeros((len(conc1),len(conc2)))
-#    Momentum_Spike = np.zeros((len(conc1),len(conc2)))
-#    Reflect_Wave = np.zeros((len(conc1),len(conc2)))
-#    for h1 in height1:
-#        for i,c1 in enumerate(conc1):
-#            for j,c2 in enumerate(conc2):
-#                print(h1,c1,c2)
-#                Collision_Time[i,j], Collision_Loc[i,j], Momentum_Spike[i,j], Reflect_Wave[i,j] = analyze_solutions(rootFile=rootFile,rootFileName = rootFileName, N=N, T=T, U_s=U_s,h_min=h_min,NuRe=NuRe,FrSquared=2,c1init=c1,c2init=c2,h1init=h1,h2init=h2)
-#        plt.figure()
-#        ax=sns.heatmap(Collision_Time,xticklabels = conc2,yticklabels = conc1)
-#        ax.set(xlabel='c2', ylabel='c1')
-#        ax.set_title('Collision Time, h1/h2 = %0.1f'%h1)
-#        filename = 'solutions/plots/Heatmap/CollisionTimeHeatmap_h1%0.1f'%h1
-#        plt.savefig(rootFile + filename.replace('.','_') + '.pdf')
-#        plt.close()
-#        
-#        plt.figure()
-#        ax=sns.heatmap(Collision_Loc,xticklabels = conc2,yticklabels = conc1)
-#        ax.set(xlabel='c2', ylabel='c1')
-#        ax.set_title('Collision Loc, h1/h2 = %0.1f'%h1)
-#        filename = 'solutions/plots/Heatmap/CollisionLocHeatmap_h1%0.1f'%h1
-#        plt.savefig(rootFile + filename.replace('.','_') + '.pdf')
-#        plt.close()
-#        
-#        plt.figure()
-#        ax=sns.heatmap(Momentum_Spike,xticklabels = conc2,yticklabels = conc1)
-#        ax.set(xlabel='c2', ylabel='c1')
-#        ax.set_title('Momentum Spike, h1/h2 = %0.1f'%h1)
-#        filename = 'solutions/plots/Heatmap/MomentumSpikeHeatmap_h1%0.1f'%h1
-#        plt.savefig(rootFile + filename.replace('.','_') + '.pdf')
-#        plt.close()
-#        
-#        plt.figure()
-#        ax=sns.heatmap(Reflect_Wave,xticklabels = conc2,yticklabels = conc1)
-#        ax.set(xlabel='c2', ylabel='c1')
-#        ax.set_title('Reflect Wave, h1/h2 = %0.1f'%h1)
-#        filename = 'solutions/plots/Heatmap/ReflectWaveHeatmap_h1%0.1f'%h1
-#        plt.savefig(rootFile + filename.replace('.','_') + '.pdf')
-#        plt.close()
-#
-#def plotsplotsplots(c1init=1.0,c2init=0.9,h1init=1.0,h2init=0.7, rootFile='Oct24/',save = False, show = False, Nt=12,Ts=0, show_legend = True,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50):
-#    plt.figure(figsize=[12,9])
-#    plt.subplot(411)
-#    example_timeplots(rootFile = rootFile,whichfile = 'h',n=3,Nt = Nt,c1init = c1init, c2init = c2init, h1init = h1init, h2init = h2init, linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#    plt.xlim([-15,15])
-#    plt.subplot(412)
-#    example_timeplots(rootFile = rootFile,whichfile = 'u',n=3,Nt = Nt,c1init = c1init, c2init = c2init , h1init = h1init, h2init = h2init,linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#    plt.xlim([-15,15])
-#    plt.subplot(413)
-#    example_timeplots(rootFile = rootFile,whichfile = 'c1',n=3,Nt = Nt,c1init = c1init, c2init = c2init, h1init = h1init, h2init = h2init,linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#    plt.xlim([-15,15])
-#    plt.subplot(414)
-#    example_timeplots(rootFile = rootFile,whichfile = 'c2',n=3,Nt = Nt,c1init = c1init, c2init = c2init , h1init = h1init, h2init = h2init,linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#    plt.xlim([-15,15])
-#    plt.xlabel('x')
-#    plt.tight_layout()
-#    if save:
-#        filename = 'front_schematic_all_separate_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f'%(c1init,c2init,h1init,h2init)
-#        plt.savefig(rootFile + 'solutions/plots/' + filename.replace('.','_') + '.pdf')
-#        if not save: plt.close()
-#    if show: plt.show()
-#    plt.figure(figsize=[12,6])
-#    example_timeplots(rootFile = rootFile,whichfile = 'h',n=3,Nt = Nt,c1init = c1init, c2init = c2init, h1init = h1init, h2init = h2init, linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#
-#    plt.xlim([-15,15])
-#    if save:
-#        filename = 'front_schematic_h_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f'%(c1init,c2init,h1init,h2init)
-#        plt.savefig(rootFile + 'solutions/plots/' + filename.replace('.','_') + '.pdf')
-#        if not save: plt.close()
-#    if show: plt.show()
-#
-#    plt.figure(figsize=[12,6])
-#    example_timeplots(rootFile = rootFile,whichfile = 'h',n=4,Nt = Nt,Ts=4,c1init = c1init, c2init = c2init, h1init = h1init, h2init = h2init, linestyle = 'solid',show_legend = show_legend,N=8000,apart=5,CFL=0.1,T=15.0,NuRe=1000,FrSquared=2.828,U_s=0.02,h_min=0.0001,sharp=50)
-#
-#    plt.xlim([0,5])
-#    if save:
-#        filename = 'ZOOMEDfront_schematic_h_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f'%(c1init,c2init,h1init,h2init)
-#        plt.savefig(rootFile + 'solutions/plots/' + filename.replace('.','_') + '.pdf')
-#        if not save: plt.close()
-#    if show: plt.show()
-#
-#
-#def initialCond(rootFile='Oct24/', rootFileName='', varList=['h','u','c1','c2'],Legend= None, SAVE = False, ymax = 1,ymin=0.1,show_legend = True,N=8000,T=15.0,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2.828,U_s=0.020,h1init=1.0,h2init=0.7,c1init=1.0,c2init=0.9,apart=5,sharp = 50, CFL =0.1):
-#    if not Legend:
-#        leg = []
-#    if not Legend:
-#        Legend = leg
-#    X = []
-#    U = []
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s,h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init,apart=apart,CFL=CFL,sharp=sharp)
-#    for whichfile in varList:
-#        if whichfile == 'u':
-#            x,t,temp = unpack(rootFile + rootFileName + details + '/q')
-#            h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#            u = temp/h
-#        elif whichfile == 'c1':
-#            x,t,temp = unpack(rootFile + rootFileName + details + '/phi1')
-#            h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#            u = temp/h
-#        elif whichfile == 'c2':
-#            x,t,temp = unpack(rootFile + rootFileName + details + '/phi2')
-#            h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#            u = temp/h
-#        else:
-#            x,t,u = unpack(rootFile + rootFileName + details + '/' + whichfile)
-#        X.append(x)
-#        U.append(u)
-#    fig = plt.figure(figsize=(12,8))
-#
-#    colorlist = ['tab:blue','tab:red','tab:green','black','orange','darkviolet','slategray']
-#    stylelist = ['solid','-.','dashed','dotted']
-#    for ii in range(1):
-#        subplotcounter = 1
-#        for jj in range(len(varList)):
-#            subplotcounter += 1
-#            x = X[jj]
-#            u = U[jj]
-#            plt.subplot(2,1,int(subplotcounter/2))
-#            plot_ = plt.plot(x,u[ii,:],color=colorlist[jj],linestyle = stylelist[0])
-#    plt.ylim([0,1.05])
-#    plt.subplot(211)
-#    plt.ylim([0,1.05])
-#    #plt.xlim([-17,17])
-#    
-#    plt.savefig(rootFile + 'solutions/plots/' + 'IC' + details.replace('.','_') + '.pdf')
-#initialCond()
-#
-#def makeDFDplots(which = 'all', save = True, show = False):
-#    if which == 'all' or which == 'sediment':
-#        print('sediment')
-#        sediment(c1init=0.7, c2init=1.0, h1init=1.0, h2init=1.0, save = save, show = show, NoInteractionAnalysis = False)
-#        sediment(c1init=0.7, c2init=1.0, h1init=1.0, h2init=0.7, save = save, show = show, NoInteractionAnalysis = False)
-#        sediment(c1init=1.0, c2init=1.0, h1init=1.0, h2init=1.0, save = save, show = show, NoInteractionAnalysis = False)
-#        sediment(c1init=0.7, c2init=1.0, h1init=0.7, h2init=1.0, save = save, show = show, NoInteractionAnalysis = False)
-#    if which == 'all' or which == 'sedimentWithNoInteraction':
-#        print('sediment with no interaction')
-#        sediment(c1init=0.7, c2init=1.0, h1init=1.0, h2init=1.0, save = save, show = show, NoInteractionAnalysis = True)
-#        sediment(c1init=0.7, c2init=1.0, h1init=1.0, h2init=0.7, save = save, show = show, NoInteractionAnalysis = True)
-#        sediment(c1init=1.0, c2init=1.0, h1init=1.0, h2init=1.0, save = save, show = show, NoInteractionAnalysis = True)
-#    if which == 'all' or which == 'profile':
-#        print('profile')
-#        plotsplotsplots(0.8,0.9,1.0,0.7,show = False,save=True,Nt=12,show_legend = False)
-#    if which == 'all' or which == 'RH':
-#        print('Rankine-Hugoniot')
-#        RH_analysis(c1init = 1.0,c2init = 0.7, h1init = 1.0, h2init = 0.7,save = True)
-#        RH_analysis(c1init = 0.7,c2init = 0.7, h1init = 1.0, h2init = 0.7,save = True)
-#        RH_analysis(c1init = 0.7,c2init = 0.7, h1init = 1.0, h2init = 1.0,save = True)
-#    if which == 'all' or which == 'IC':
-#        print('Initial Conditions')
-#        initialCond(h1init = 1.0,h2init=0.7,c1init = 0.8, c2init = 0.9)
-#    if which == 'all' or which == 'collisionVideo':
-#        print('Videos')
-#        runTwoCurrentSWE(c1init=0.8, c2init=0.9,h1init=1.0, h2init = 0.7)
-#        runTwoCurrentSWE(rootFileName = 'Separated', c1init=0.8, c2init=0.9,h1init=1.0, h2init = 0.7,U_s=0.02)
-#
-#def spacetime(whichfile,leftBound = None,rightBound = None, maxT = None, minT=None, rootFile = 'TwoCurrentShallowWaterSimulations/InitialConditionTest/' ,rootFileName = 'Separated',N=4000,T=15.0,h_min=0.0001,NuRe=1000,NuPe=None,FrSquared=2,U_s=0.020,h1init=1.0,h2init=1.0,c1init=1.0,c2init=1.0,apart=5,CFL=0.1,sharp=50,show = False, save = True,contours=False,close=True,ZOOMED=False):
-#    details = buildFileName(N=N, T=T, h_min=h_min, NuRe=NuRe, FrSquared=FrSquared, U_s=U_s,h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init,apart=apart,CFL=CFL,sharp=sharp)
-#    if whichfile == 'u':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/q')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        func = temp/h
-#    elif whichfile == 'c1':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/phi1')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        func = temp/h
-#    elif whichfile == 'c2':
-#        x,t,temp = unpack(rootFile + rootFileName + details + '/phi2')
-#        h = unpack(rootFile + rootFileName + details + '/h')[-1]
-#        func = temp/h
-#    else:
-#        x,t,func = unpack(rootFile + rootFileName + details + '/' + whichfile)
-#    if not leftBound:  leftBound  = x[0]
-#    if not rightBound: rightBound = x[-1]
-#    if not maxT:       maxT  = t[-1]
-#    if not minT:       minT  = t[0]
-#    xMaxIdx = np.where(x<=rightBound)[-1][-1]
-#    xMinIdx = np.where(x>= leftBound)[-1][0]
-#    tMaxIdx = np.where(t<maxT)[-1][-1]
-#    tMinIdx = np.where(t>minT)[-1][0]
-#    xmesh,tmesh = np.meshgrid(x[xMinIdx:xMaxIdx],t[tMinIdx:tMaxIdx])
-#    
-#    if ZOOMED:
-#        plt.figure(figsize=[3,6])
-#    else:
-#        plt.figure(figsize=[8,6])
-#    fig = plt.pcolormesh(xmesh,tmesh,func[tMinIdx:tMaxIdx,xMinIdx:xMaxIdx],shading = 'gouraud',linewidth =0)
-#    plt.xlabel('x')
-#    plt.ylabel('time')
-#    if ZOOMED:
-#        plt.subplots_adjust(left = 0.3, right =0.98, top = 0.97, bottom =0.13)
-#    else:
-#        plt.subplots_adjust(left = 0.1, right =0.99, top = 0.97, bottom =0.13)
-#        plt.colorbar(fig)
-#    #if whichfile == 'u' or whichfile == 'q':
-#    #    plt.set_cmap(cm['PuOr'])
-#    #else:
-#    #    plt.set_cmap(cm['viridis'])
-#    if contours:
-#        cp = plt.contour(xmesh,tmesh,func[:tMaxIdx,xMinIdx:xMaxIdx],20,colors = 'k')
-#    if save:
-#        if ZOOMED:
-#            FileName = rootFile + 'solutions/plots/' + 'ZOOMEDspacetime%s_maxT%0.1f_domainwidth%0.1f_'%(whichfile,maxT,rightBound - leftBound) + details
-#        else:
-#            FileName = rootFile + 'solutions/plots/' + 'spacetime%s_maxT%0.1f_domainwidth%0.1f_'%(whichfile,maxT,rightBound - leftBound) + details
-#        plt.savefig(FileName.replace('.','_') + '.pdf')
-#        plt.savefig(FileName.replace('.','_') + '.png')
-#    if show:
-#        plt.show()
-#    plt.close()
-#
-#def MaxVelvsTime(rootFile,rootFileName,fileDetails,FinalDistance):
-#    X,T,temp = unpack(rootFile + rootFileName + 'q' + fileDetails)
-#    h = unpack(rootFile + rootFileName + 'h' + fileDetails)[-1]
-#    u = temp/h
-#    uMax = []
-#
-#    h_min = h[0,-1] if h[0,0]==h[0,-1] else 2*float(fileDetails[fileDetails.find('hmin')+4:fileDetails.find('hmin')+11])
-#    
-#    for ii in range(len(T)):
-#        if X[h[ii,:]>2*h_min][-1]>FinalDistance:
-#            break
-#        uMax.append(np.max(u[ii,:]))
-#    print(X[h[ii,:]>2*h_min][-1],T[ii])
-#    return T[:ii],np.array(uMax)
-#
-#
-#def MaxVelvsDistance(rootFile,rootFileName,fileDetails,FinalDistance):
-#    X,T,temp = unpack(rootFile + rootFileName + 'q' + fileDetails)
-#    h = unpack(rootFile + rootFileName + 'h' + fileDetails)[-1]
-#    u = temp/h
-#    uMax = []
-#
-#    h_min = h[0,-1] if h[0,0]==h[0,-1] else 2*float(fileDetails[fileDetails.find('hmin')+4:fileDetails.find('hmin')+11])
-#    
-#    rightFront = []
-#    for ii in range(len(T)):
-#        if X[h[ii,:]>2*h_min][-1]>FinalDistance:
-#            break
-#            
-#        rightFront.append(X[h[ii,:]>2*h_min][-1])
-#        if T[ii]>0.5:
-#            u_at_front = u[ii,list(np.all([X<rightFront[-1]+1,X>rightFront[-1]-1],axis=0))]
-#            uMax.append(np.max(u_at_front))
-#        else:
-#            uMax.append(np.max(u[ii,:]))
-#    print(X[h[ii,:]>2*h_min][-1],T[ii])
-#    return np.array(rightFront),np.array(uMax)
-#
-#def FrontHeightvsDistance(rootFile,rootFileName,fileDetails,FinalDistance):
-#    X,T,temp = unpack(rootFile + rootFileName + 'q' + fileDetails)
-#    h = unpack(rootFile + rootFileName + 'h' + fileDetails)[-1]
-#    u = temp/h
-#    uMax = []
-#
-#    h_min = h[0,-1] if h[0,0]==h[0,-1] else 2*float(fileDetails[fileDetails.find('hmin')+4:fileDetails.find('hmin')+11])
-#    
-#    rightFront = []
-#    for ii in range(len(T)):
-#        if X[h[ii,:]>2*h_min][-1]>FinalDistance:
-#            break
-#            
-#        rightFront.append(X[h[ii,:]>2*h_min][-1])
-#        if T[ii]>0.5:
-#            u_at_front = u[ii,list(np.all([X<rightFront[-1]+1,X>rightFront[-1]-1],axis=0))]
-#            uMax.append(np.max(u_at_front))
-#        else:
-#            uMax.append(np.max(u[ii,:]))
-#    print(X[h[ii,:]>2*h_min][-1],T[ii])
-#    return np.array(rightFront),np.array(uMax)
-#
-#def FrontHeightvsTime(rootFile,rootFileName,fileDetails,FinalDistance):
-#    X,T,temp = unpack(rootFile + rootFileName + 'q' + fileDetails)
-#    h = unpack(rootFile + rootFileName + 'h' + fileDetails)[-1]
-#    u = temp/h
-#    FrontHeight = []
-#
-#    h_min = h[0,-1] if h[0,0]==h[0,-1] else 2*float(fileDetails[fileDetails.find('hmin')+4:fileDetails.find('hmin')+11])
-#    
-#    for ii in range(len(T)):
-#        if X[h[ii,:]>2*h_min][-1]>FinalDistance:
-#            break
-#        front_loc = X[h[ii,:]>2*h_min][-1]
-#        h_at_front = h[ii,list(np.all([X<front_loc+1,X>front_loc-1],axis=0))]
-#        FrontHeight.append(np.max(h_at_front))
-#        
-#    return T[:ii],np.array(FrontHeight)
-#
-#def plotFrontHeight_vs_Time(h1init,c1init,FinalDistance,normalized = True, rootFile = 'TwoCurrentShallowWaterSimulations/SINDyData/' ,rootFileName = '',N=1000,T=30.0,h_min=0.0001,NuRe=1000,apart = 5,NuPe=None,FrSquared=2,U_s=0.01,h2init=0.0,c2init=0.0,show_legend = False, show = False, save = True, close = True,sharp = None, CFL = None):
-#  
-#    if not NuPe: 
-#        NuPe = NuRe
-#    details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s, apart = apart, NuPe=NuPe, h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init,sharp = sharp, CFL = CFL)
-#    t,u = FrontHeightvsTime(rootFile,rootFileName,details,FinalDistance)
-#    plt.plot(t/t[-1],u,zorder=1)
-#    plt.xticks([0,0.25,0.5,0.75,1.0],[0,'','','','Final Time'])
-#    plt.xlabel('Final Time is when right front hits x = %i'%FinalDistance)
-#    plt.ylabel('height at front')
-#    plt.grid()
-#    if save: plt.savefig('FrontHeight_vs_time_FinalDistance%i_Normalized%r.pdf'%(FinalDistance,normalized))
-#    if show: plt.show()
-#    if close: plt.close()
-#
-#def plotMaxVel_vs_Time(h1init,c1init,FinalDistance,normalized = True, rootFile = 'TwoCurrentShallowWaterSimulations/SINDyData/' ,rootFileName = '',N=1000,T=30.0,h_min=0.0001,NuRe=1000,apart = 5,NuPe=None,FrSquared=2,U_s=0.01,h2init=0.0,c2init=0.0,show_legend = False):
-#    if not isinstance(h1init,list): 
-#        h1init = [h1init]
-#    if not isinstance(c1init,list): 
-#        c1init = [c1init]
-#  
-#    NinetyNinePercent = []
-#    NinetyEightPercent = []
-#    NinetyFivePercent = []
-#    NinetyPercent = []
-#    for i,h1 in enumerate(h1init):
-#        for j,c1 in enumerate(c1init):
-#            if not NuPe: 
-#                NuPe = NuRe
-#            details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s, apart = apart, NuPe=NuPe, h1init=h1, h2init=h2init, c1init=c1, c2init=c2init)
-#            t,u = MaxVelvsTime(rootFile,rootFileName,details,FinalDistance)
-#            uConst = u[-1]
-#            uScale = uConst if normalized else 1.0
-#            NinetyNinePercent.append([t[u>0.99*uConst][0]/t[-1],u[u>0.99*uConst][0]/uScale])
-#            NinetyEightPercent.append([t[u>0.98*uConst][0]/t[-1],u[u>0.98*uConst][0]/uScale])
-#            NinetyFivePercent.append([t[u>0.95*uConst][0]/t[-1],u[u>0.95*uConst][0]/uScale])
-#            NinetyPercent.append([t[u>0.90*uConst][0]/t[-1],u[u>0.90*uConst][0]/uScale])
-#            if normalized:
-#                plt.plot(t/t[-1],u/u[-1],zorder=1)
-#                #plt.plot(t/t[-1],u/u[-1],color = tabcolors[i%len(tabcolors)], linestyle = mpllinestyles[j%len(mpllinestyles)])
-#            else:
-#                plt.plot(t/t[-1],u,zorder=1)
-#    NinetyNinePercent = np.array(NinetyNinePercent) 
-#    NinetyEightPercent = np.array(NinetyEightPercent) 
-#    NinetyFivePercent = np.array(NinetyFivePercent) 
-#    NinetyPercent = np.array(NinetyPercent) 
-#    plt.scatter(NinetyNinePercent[:,0],NinetyNinePercent[:,1],color='k',marker = mplmarkers[0],zorder=2)
-#    plt.scatter(NinetyEightPercent[:,0],NinetyEightPercent[:,1],color='k',marker = mplmarkers[5],zorder=2)
-#    plt.scatter(NinetyFivePercent[:,0],NinetyFivePercent[:,1],color='k',marker = mplmarkers[6],zorder=2)
-#    plt.scatter(NinetyPercent[:,0],NinetyPercent[:,1],color='k',marker = mplmarkers[7],zorder=2)
-#    plt.xticks([0,0.25,0.5,0.75,1.0],[0,'','','','Final Time'])
-#    plt.xlabel('Final Time is when right front hits x = %i'%FinalDistance)
-#    plt.ylabel('max veclocity (velocity at right front)')
-#    plt.grid()
-#    plt.savefig('MaxVel_vs_time_FinalDistance%i_Normalized%r.pdf'%(FinalDistance,normalized))
-#    plt.show()
-#
-#def plotMaxVel_vs_Distance(h1init,c1init,FinalDistance,normalized = True, rootFile = 'TwoCurrentShallowWaterSimulations/SINDyData/' ,rootFileName = '',N=1000,T=30.0,h_min=0.0001,NuRe=1000,apart = 5,NuPe=None,FrSquared=2,U_s=0.01,h2init=0.0,c2init=0.0,sharp=None,CFL=None,show_legend = False):
-#    if not isinstance(h1init,list): 
-#        h1init = [h1init]
-#    if not isinstance(c1init,list): 
-#        c1init = [c1init]
-#  
-#    NinetyNinePercent = []
-#    NinetyEightPercent = []
-#    NinetyFivePercent = []
-#    NinetyPercent = []
-#    for i,h1 in enumerate(h1init):
-#        for j,c1 in enumerate(c1init):
-#            if not NuPe: 
-#                NuPe = NuRe
-#            details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s, apart = apart, NuPe=NuPe, h1init=h1, h2init=h2init, c1init=c1, c2init=c2init,sharp = sharp, CFL = CFL)
-#            rf,u = MaxVelvsDistance(rootFile,rootFileName,details,FinalDistance)
-#            print('max front velocity is %0.8f, final front velocity is %0.8f, average of those velocities is %0.16f'%(np.max(u),u[-1],(np.max(u)+u[-1])/2))
-#            print('\n (Froude Squared, constant velocity) = (%0.5f, %0.16f)\n'%(FrSquared,(np.max(u)+u[-1])/2))
-#            rf = rf - rf[0]
-#            uConst = u[-1]
-#            uScale = uConst if normalized else 1.0
-#            NinetyNinePercent.append([rf[u>0.99*uConst][0],u[u>0.99*uConst][0]/uScale])
-#            NinetyEightPercent.append([rf[u>0.98*uConst][0],u[u>0.98*uConst][0]/uScale])
-#            NinetyFivePercent.append([rf[u>0.95*uConst][0],u[u>0.95*uConst][0]/uScale])
-#            NinetyPercent.append([rf[u>0.90*uConst][0],u[u>0.90*uConst][0]/uScale])
-#            if normalized:
-#                plt.plot(rf,u/u[-1],zorder=1)
-#                #plt.plot(t/t[-1],u/u[-1],color = tabcolors[i%len(tabcolors)], linestyle = mpllinestyles[j%len(mpllinestyles)])
-#            else:
-#                plt.plot(rf,u,zorder=1)
-#    NinetyNinePercent = np.array(NinetyNinePercent) 
-#    NinetyEightPercent = np.array(NinetyEightPercent) 
-#    NinetyFivePercent = np.array(NinetyFivePercent) 
-#    NinetyPercent = np.array(NinetyPercent) 
-#    plt.scatter(NinetyNinePercent[:,0],NinetyNinePercent[:,1],color='k',marker = mplmarkers[0],zorder=2)
-#    plt.scatter(NinetyEightPercent[:,0],NinetyEightPercent[:,1],color='k',marker = mplmarkers[5],zorder=2)
-#    plt.scatter(NinetyFivePercent[:,0],NinetyFivePercent[:,1],color='k',marker = mplmarkers[6],zorder=2)
-#    plt.scatter(NinetyPercent[:,0],NinetyPercent[:,1],color='k',marker = mplmarkers[7],zorder=2)
-#    #plt.xticks([0,0.25,0.5,0.75,1.0],[0,'','','','Final Time'])
-#    plt.xlabel('Distance Taveled')
-#    plt.ylabel('max veclocity (velocity at right front)')
-#    plt.grid()
-#    plt.savefig(rootFile + 'MaxVel_vs_Distance_FinalDistance%i_Normalized%r_FrFr%0.3f_N%i.pdf'%(FinalDistance,normalized,FrSquared,N))
-#    #plt.show()
-#    plt.close()
-#
-#def secant_root(x1,x2,y1,y2):
-#    return (1-y1)*(x2-x1)/(y2-y1)+x1
-#
-#def CollVel_vs_initValues(h1init,c1init,FinalDistance,rootFile = 'TwoCurrentShallowWaterSimulations/SINDyData/' ,rootFileName = '',N=1000,T=30.0,h_min=0.0001,NuRe=1000,apart = 5,NuPe=None,FrSquared=2,U_s=0.01,h2init=0.0,c2init=0.0,show_legend = False):
-#    if not isinstance(h1init,list): 
-#        h1init = [h1init]
-#    if not isinstance(c1init,list): 
-#        c1init = [c1init]
-#    scatterData = []
-#    for i,h1 in enumerate(h1init):
-#        for j,c1 in enumerate(c1init):
-#            if not NuPe: 
-#                NuPe = NuRe
-#            details = buildFileName(N, T, h_min, NuRe, FrSquared, U_s, apart = apart, NuPe=NuPe, h1init=h1, h2init=h2init, c1init=c1, c2init=c2init)
-#            t,u = MaxVelvsTime(rootFile,rootFileName,details,FinalDistance)
-#            scatterData.append([h1,c1,u[-1]])
-#            X = np.array(scatterData)
-#    return X[:,0], X[:,1], X[:,2] 
-#
-#def Scatter3D(x,y,z,fig = None,sub=None, xlab='initial h',ylab='initial c',zlab='final max u',alpha = 1,show = True): 
-#    if fig==None:
-#        fig = plt.figure()
-#        ax = fig.add_subplot(projection='3d')
-#    else:
-#        ax = fig.add_subplot(sub,projection='3d')
-#    X = np.linspace(x[0],x[-1],250)
-#    Y = np.linspace(y[0],y[-1],250)
-#    X,Y = np.meshgrid(X,Y)
-#    Z = alpha*np.sqrt(X*Y)
-#    ax.scatter(x,y,z,c='k')
-#    ax.plot_surface(X,Y,Z,cmap=cm['cool'],linewidth=0)
-#    ax.set_xlabel(xlab,labelpad = 15)
-#    ax.set_ylabel(ylab,labelpad = 15)
-#    ax.set_zlabel(zlab,labelpad = 15)
-#    if show: plt.show()
-#
-#def initialHC_vs_FinalU(FinalDistance):
-#    plt.rcParams.update({"text.usetex":True})
-#    h,c,u = CollVel_vs_initValues(h1init = [i/10 for i in range(1,11)], c1init=[i/10 for i in range(1,11)], FinalDistance = FinalDistance, rootFile = 'TestNonDimVelocity/NonDim_' ,rootFileName = '',N=2000,T=100.0,h_min=0.0001,NuRe=1000,apart = 0,NuPe=None,FrSquared=2,U_s=0.00,h2init=0.0,c2init=0.0,show_legend = False)
-#    S = np.average(u/np.sqrt(h*c))
-#    P = np.polyfit(np.sqrt(h*c),u,1)
-#
-#    x = np.sqrt(h*c)
-#    LS = np.matmul(x,u)/np.matmul(x,x)
-#    for (H,C,U) in zip(h,c,u):
-#        print('initial h = %0.2f, initial c = %0.2f, final u = %0.2f, u/(hc)^(1/2) = %0.4f'%(H,C,U,U/np.sqrt(H*C)))
-#    print('min u/(hc)^(1/2) = %0.4f'%(np.min(u/np.sqrt(h*c))))
-#    print('u/(hc)^(1/2) = %0.4f, on average'%(S))
-#    print('max u/(hc)^(1/2) = %0.4f'%(np.max(u/np.sqrt(h*c))))
-#    
-#    fig = plt.figure(figsize=[20,5])
-#    Scatter3D(h,c,u,fig=fig,sub=141,alpha=1,show=False)
-#    plt.title('$u^*=\sqrt{h_0c_0}$')
-#    Scatter3D(h,c,u,fig=fig,sub=142,alpha=S,show=False)
-#    plt.title('$u^*=%0.4f\sqrt{h_0c_0}$'%S)
-#    Scatter3D(h,c,u,fig=fig,sub=143,alpha=LS,show=False)
-#    plt.title('$u^*=%0.4f\sqrt{h_0c_0}$'%LS)
-#    Scatter3D(h,c,u,fig=fig,sub=144,alpha=P[0],show=False)
-#    plt.title('$u^*=%0.4f\sqrt{h_0c_0}$'%P[0])
-#    plt.tight_layout()
-#    plt.savefig('initialHC_vs_FinalU_FinalDistance%i.pdf'%FinalDistance)
-#    plt.close()
-#
-#    plt.scatter(x,u,label = 'Final Max Velocity',color='k')
-#    plt.plot(x,S*x,label = 'Average $\\alpha:\ %0.4f\sqrt{h_0c_0}$'%S)
-#    plt.plot(x,LS*x,label = 'Least Squares: $%0.4f\sqrt{h_0c_0}$'%LS)
-#    plt.plot(x,x*P[0]+P[1],label = 'Line of best fit: $%0.4f\sqrt{h_0c_0}%s%0.4f$'%(P[0],'+' if P[1]>=0 else '-',np.abs(P[1])))
-#    x = np.sqrt(h*c)
-#    plt.legend()
-#    plt.xlabel('$\sqrt{h_0c_0}$')
-#    plt.ylabel('Velocity')
-#    plt.savefig('sqrtInitialHC_vs_FinalU_bestFit_FinalDistance%i.pdf'%FinalDistance)
-#    plt.close()
-# 
-#    fig = plt.figure(figsize=[20,6])
-#    plt.subplot(141)
-#    plt.hist(u/x)
-#    plt.title('$\\frac{u^*}{\sqrt{h_0c_0}}$')
-#    plt.subplot(142)
-#    plt.hist(u-S*x)
-#    plt.title('Average $\\alpha$\n $u^*-%0.4f\sqrt{h_0c_0}$'%S)
-#    plt.subplot(143)
-#    plt.hist(u-LS*x)
-#    plt.title('Least Squares\n $u^*-%0.4f\sqrt{h_0c_0}$'%LS)
-#    plt.subplot(144)
-#    plt.hist(u-(P[0]*x+P[1]))
-#    plt.title('Line of best fit\n $u^*-(%0.4f\sqrt{h_0c_0}%s%0.4f$)'%(P[0],'+' if P[1]>=0 else '-',np.abs(P[1])))
-#    plt.tight_layout()
-#    #plt.subplots_adjust(left
-#    plt.savefig('AlphaValueAnalsysis_InitialHC_vs_FinalU_FinalDistance%i.pdf'%FinalDistance)
-#    plt.close()
-#
-#def make_list(x):
-#    if not isinstance(x,list): return [x]
-#    else: return x
-#
-#def plot_params(param,zoom_window='all', which='h', rootFile = 'Baseline/', rootFileName = '', N=16000, T=30.0, h_min=0.0001, NuRe=1000, CFL=0.1, sharp=200, apart = 5, NuPe=None, FrSquared=2.828, U_s=0.00, h1init=1.0, h2init=1.0, c1init=1.0, c2init=1.0, legend = [],show=False,legend_title=None,save=True):
-#    plt.figure()
-#    def get_ylim(x,u,a,b):
-#        u=u[list(np.all([x<b,x>a],axis=0))]
-#        return np.min(u),np.max(u)
-#        #max_,min_ = np.max(u),np.min(u)
-#        #offset = (max_-min_)*0.05
-#        #return [min_-offset,max_+offset]
-# 
-#        
-#    h_min = make_list(h_min)
-#    N = make_list(N)
-#    NuRe = make_list(NuRe)
-#    sharp = make_list(sharp)
-#    CFL = make_list(CFL)
-#
-#    FrSquared = make_list(FrSquared)
-#    U_s = make_list(U_s)
-#
-#    if not NuPe: 
-#        NuPe = NuRe
-#    else:
-#        NuPe = make_list(NuPe)
-#
-#    print(param + ', ' + zoom_window)
-#    near_origin = [0,2]
-#    near_origin_y = [100,-100]
-#    front = [100,-100]
-#    front_y = [100,-100]
-#    bore = [100,-100]
-#    bore_y = [100,-100]
-#    ls_counter = 2
-#    for hm in h_min:
-#        for nn in N:
-#            for NumRey,NumPec in zip(NuRe,NuPe):
-#                for sss in sharp:
-#                    for cfl in CFL:
-#                        for fr2 in FrSquared:
-#                            for us in U_s:
-#                                print(hm,nn,NumRey,sss,cfl,fr2,us)
-#                                details = buildFileName(N=nn, T=T, h_min = hm, NuRe = NumRey, FrSquared = fr2, U_s = us,sharp=sss,CFL=cfl, apart = apart, NuPe=NumPec, h1init=h1init, h2init=h2init, c1init=c1init, c2init=c2init)
-#                                x,t,h = unpack(rootFile + rootFileName + 'h' + details)
-#                                if which in ['u','c1','c2']:
-#                                    _,_,u = unpack(rootFile + rootFileName + char_to_cons[which] + details)
-#                                    u=u/h
-#                                else:
-#                                    _,_,u = unpack(rootFile + rootFileName + which + details)
-#                                print(' \n t = %0.16f \n'%(t[-1]))
-#                                front_loc = x[h[-1,:]>2*hm][-1]
-#                                if param == 'SpaceDiscretization':
-#                                    front = [min(front[0],front_loc-0.1),max(front[1],front_loc+0.02)]
-#                                if param == 'CFL':
-#                                    front = [min(front[0],front_loc-0.1),max(front[1],front_loc+0.02)]
-#                                else:
-#                                    front = [min(front[0],front_loc-2.5),max(front[1],front_loc+0.5)]
-#                                front_y = [min(front_y[0],get_ylim(x,u[-1,:],front[0],front[1])[0]),max(front_y[1],get_ylim(x,u[-1,:],front[0],front[1])[1])]
-#                                #h_at_front = h[-1,list(np.all([x<front[1],x>front[0]],axis=0))]
-#                                behind_front = list(np.all([x<front_loc-1,x>0],axis=0))
-#                                h_behind_front = h[-1,behind_front]
-#                                x_behind_front = x[behind_front]
-#                                level_cut = (np.max(h_behind_front)+h_behind_front[-1])/2.0
-#                                #snowplow_max = np.max(u_at_front)
-#                                #bore_loc = x[u[-1,:]>1.01*snowplow_max][-1]
-#                                bore_loc = x_behind_front[h_behind_front>level_cut][-1]
-#                                print(bore_loc)
-#                                if param == 'SpaceDiscretization':
-#                                    bore = [max(min(bore[0],bore_loc-0.02),0),max(bore[1],bore_loc+0.02)]
-#                                if param == 'CFL':
-#                                    bore = [max(min(bore[0],bore_loc-0.01),0),max(bore[1],bore_loc+0.01)]
-#                                else:
-#                                    bore = [max(min(bore[0],bore_loc-0.5),0),max(bore[1],bore_loc+0.5)]
-#                                bore_y = [min(bore_y[0],get_ylim(x,u[-1,:],bore[0],bore[1])[0]),max(bore_y[1],get_ylim(x,u[-1,:],bore[0],bore[1])[1])]
-#                                near_origin_y = [min(near_origin_y[0],get_ylim(x,u[-1,:],near_origin[0],near_origin[1])[0]),max(near_origin_y[1],get_ylim(x,u[-1,:],near_origin[0],near_origin[1])[1])]
-#                                plt.plot(x,u[-1,:],linestyle = mpllinestyles[ls_counter%len(mpllinestyles)],alpha=0.5)
-#                                #plt.plot(x,u[-1,:])
-#                                ls_counter+=1
-#    print(' ')
-#    plt.legend(legend,title = legend_title)
-#    if zoom_window == 'all':
-#        plt.xlim([0,x[-1]])
-#        if which == 'u':
-#            plt.ylim([-0.05,1.05])
-#        savelabel = ''
-#    elif zoom_window == 'front':
-#        #plt.ylim(front_y)
-#        offset = (front_y[1]-front_y[0])*0.05
-#        plt.ylim([front_y[0]-offset,front_y[1]+offset])
-#        plt.xlim(front)
-#        savelabel = '_near_front'
-#    elif zoom_window == 'bore':
-#        #plt.ylim(bore_y)
-#        offset = (bore_y[1]-bore_y[0])*0.05
-#        plt.ylim([bore_y[0]-offset,bore_y[1]+offset])
-#        plt.xlim(bore)
-#        savelabel = '_near_bore'
-#    elif zoom_window == 'origin':
-#        plt.xlim(near_origin)
-#        offset = (near_origin_y[1]-near_origin_y[0])*0.05
-#        plt.ylim([near_origin_y[0]-offset,near_origin_y[1]+offset])
-#        savelabel = '_near_origin'
-#    plt.xlabel('x')
-#    plt.ylabel(variable_dict[which])
-#    if show: plt.show()
-#    if save: plt.savefig(rootFile + 'solutions/plots/' + param + '_' + which + savelabel + '.pdf')
-#    #plt.close()
-#
-#def run_params():
-#    plt.rcParams.update({"text.usetex":True})
-#    for zoom_window in ['all','front','bore','origin']:
-#        for which in ['u','q','h']:
-#            #plot_params('Froude',zoom_window=zoom_window,FrSquared = [2,4,8],legend = ['Fr2 = %i'%f for f in [2,4,8]])
-#            plot_params('SpaceDiscretization',legend_title='$N$',which=which,zoom_window=zoom_window,N=[4000,8000,16000,32000], legend = ['%i'%f for f in [4000,8000,16000,32000]])
-#            plot_params('h_min',legend_title='$h_{\\textrm{min}}$',which=which,zoom_window=zoom_window,h_min = [0.00005,0.0001,0.0002,0.0004], legend = ['%0.5f'%f for f in [0.00005,0.0001,0.0002,0.0004]])
-#            plot_params('NuRe',legend_title='$\\textrm{Re}, \\textrm{Pe}$' ,which=which,zoom_window=zoom_window,NuRe = [250,500,1000,2000], legend = ['%i'%f for f in [250,500,1000,2000]])
-#            plot_params('sharpness',legend_title='s',which=which,zoom_window=zoom_window,sharp = [50,100,200,400], legend = ['%i'%f for f in [50,100,200,400]])
-#            plot_params('CFL',legend_title='CFL',which=which,zoom_window=zoom_window,CFL = [0.4,0.2,0.1,0.05], legend = ['%0.2f'%f for f in [0.4,0.2,0.1,0.05]])
-#            plot_params('U_s',legend_title='$u_s$' ,which=which,zoom_window=zoom_window,U_s = [0.0,0.01,0.02],legend = ['%0.2f'%f for f in [0.0,0.01,0.02]])
-#    for zoom_window in ['all','front']:
-#        for which in ['c1','c2']:
-#            #plot_params('Froude',zoom_window=zoom_window,FrSquared = [2,4,8],legend = ['Fr2 = %i'%f for f in [2,4,8]])
-#            plot_params('SpaceDiscretization',legend_title='$N$',which=which,zoom_window=zoom_window,N=[4000,8000,16000,32000], legend = ['%i'%f for f in [4000,8000,16000,32000]])
-#            plot_params('h_min',legend_title='$h_{\\textrm{min}}$',which=which,zoom_window=zoom_window,h_min = [0.00005,0.0001,0.0002,0.0004], legend = ['%0.5f'%f for f in [0.00005,0.0001,0.0002,0.0004]])
-#            plot_params('NuRe',legend_title='$\\textrm{Re}, \\textrm{Pe}$',which=which,zoom_window=zoom_window,NuRe = [250,500,1000,2000], legend = ['%i'%f for f in [250,500,1000,2000]])
-#            plot_params('sharpness',legend_title='s',which=which,zoom_window=zoom_window,sharp = [50,100,200,400], legend = ['%i'%f for f in [50,100,200,400]])
-#            plot_params('CFL',legend_title='CFL',which=which,zoom_window=zoom_window,CFL = [0.4,0.2,0.1,0.05], legend = ['%0.2f'%f for f in [0.4,0.2,0.1,0.05]])
-#            plot_params('U_s',legend_title='$u_s$',which=which,zoom_window=zoom_window,U_s = [0.0,0.01,0.02],legend = ['%0.2f'%f for f in [0.0,0.01,0.02]])
-#    plt.rcParams.update({"text.usetex":False})
-#
-#def Onesided_plots(whichfile, upper_x=5.0,c1init=1.0,c2init=1.0,h1init=1.0,h2init=1.0, rootFile='RH/',save = True, show = False, Nt=12,Ts=0, n =3, show_legend = False,N=16000,apart=5,CFL=0.1,T=40.0,NuRe=1000,FrSquared=2.828,U_s=0.0,h_min=0.0001,sharp=50):
-#    plt.figure(figsize=[9,4])
-#    example_timeplots(rootFile = rootFile,whichfile = whichfile,n=n,Nt = Nt,Ts=Ts,c1init = c1init, c2init = c2init, h1init = h1init, h2init = h2init, linestyle = 'solid',show_legend = show_legend,N=N,apart=apart,CFL=CFL,T=T,NuRe=NuRe,FrSquared=FrSquared,U_s=U_s,h_min=h_min,sharp=sharp)
-#
-#    plt.xlim([-0,upper_x])
-#    if save:
-#        filename = 'front_schematic_%s_cOne%0.1f_cTwo%0.1f_hOne%0.1f_hTwo%0.1f_upperx_%i'%(whichfile,c1init,c2init,h1init,h2init,upper_x)
-#        plt.savefig(rootFile + 'solutions/plots/' + filename.replace('.','_') + '.pdf')
-#        if not save: plt.close()
-#    if show: plt.show()
+        plot_numer(X_plot,H_plot,'hmin','h_{\\textrm{min}}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        plot_numer(X_plot,U_plot,'hmin','h_{\\textrm{min}}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table('\\hmin', par_list, par_matrix)
+        return par_matrix 
+
+    def NumericalValidation_N(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
+        par_list = [5000,10000,20000,40000]
+        par_matrix = np.zeros((5,len(par_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0 
+        H_plot = []
+        U_plot = []
+        X_plot = []
+
+        for i in range(len(par_list)):
+            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=0.0001,NuRe = 1000,CFL=0.1,sharp=200)
+            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
+
+            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+                par_matrix[j,i] = val
+            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=200,T=T)
+            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=200,T=T)[-1]
+            X_plot.append(x)
+            H_plot.append(H[-1,1:])
+            U_plot.append(U[-1,1:])
+
+        plot_numer(X_plot,H_plot,'SpaceDiscretization','\\Delta x','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        plot_numer(X_plot,U_plot,'SpaceDiscretization','\\Delta x','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table('\\Delta x', [100/N for N in [5000, 10000, 20000, 40000]], par_matrix)
+        return par_matrix 
+    NumericalValidation_N()
+    NumericalValidation_hmin()
+    NumericalValidation_NuRe()
+    NumericalValidation_Sharp()
+    NumericalValidation_CFL()
+
+def article_plots():
+    pass

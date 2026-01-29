@@ -20,9 +20,9 @@ double NuRe, NuPe, CFL, h_min, sharp;
 double c2init, h2init;
 
 // Physical parameters
-#define a -20. // lower bound of the interval
-#define b 20.  // upper bound of the interval
-#define T 6. // Final Time
+#define a -15. // lower bound of the interval
+#define b 15.  // upper bound of the interval
+#define T 5. // Final Time
 #define FrSquared 1.0 // Froude number
 //#define U_s 0.00 // Settling speed
 //double U_s = 0.0;
@@ -30,7 +30,7 @@ double c2init, h2init;
 double U_s;
 
 // Initital conditions parameters 
-#define apart 5.0 // How far apart are the centers of the current
+#define apart 6.0 // How far apart are the centers of the current
 #define h1init 1.0
 //#define h2init 1.0
 //double h2init = 0.7;
@@ -38,11 +38,12 @@ double U_s;
 //double c1init = 0.7;
 //#define c2init 1.0
 //double c2init = 0.7;
-#define cur1wid 1.0
-#define cur2wid 1.0
+#define cur1wid 2.0
+#define cur2wid 2.0
 
 // File information
-#define fileprefix "Oct2_Schematics/"
+#define fileprefix "test_Antonia/"
+#define subfile "sims/AB_"
 
 
 // WENO constants
@@ -111,6 +112,11 @@ double *deposit1,*deposit2;
 
 FILE *h_file,*q_file,*phi1_file,*phi2_file,*deposit1_file,*deposit2_file,*log_file; // Variable identifying a file
 int main(int argc, char* argv[]){
+    if (argc < 9) {
+        fprintf(stderr, "Error: missing arguments.\n");
+        fprintf(stderr, "Usage: %s <input_file> [other options]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
     //double c1init = ((double)atoi(argv[1]))/100.0;
     //double U_s = ((double)atoi(argv[1]))/1000.0;
     // N NuRe CFL h_min sharp U_s c2init h2init
@@ -133,8 +139,8 @@ int main(int argc, char* argv[]){
     char file_details[256];
     char dir[512], str_log[1024]; // String of characters containing directory name and log name
     char str_h[1024],str_q[1024],str_phi1[1024],str_phi2[1024],str_deposit1[1024],str_deposit2[1024]; // String of characters containing file name
-    sprintf(file_details, "sims/hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%1.0fapart_N%i_CFL%0.3f_T%0.1f_NuRe%0.0f_NuPe%0.0f_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%0.0f", h1init,h2init,c1init,c2init,apart,N,CFL,T,NuRe,NuPe,FrSquared,U_s,h_min,sharp); // Building a string that contains all the parameter details for the file names
-    sprintf(dir, "%s%s",fileprefix,file_details); // Building the directory name
+    sprintf(file_details, "hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%1.0fapart_N%i_CFL%0.3f_T%0.1f_NuRe%0.0f_NuPe%0.0f_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%0.0f", h1init,h2init,c1init,c2init,apart,N,CFL,T,NuRe,NuPe,FrSquared,U_s,h_min,sharp); // Building a string that contains all the parameter details for the file names
+    sprintf(dir, "%s%s%s",fileprefix,subfile,file_details); // Building the directory name
     sprintf(str_h, "%s/h", dir); // Building a complete file name
     sprintf(str_q, "%s/q", dir); // Building a complete file name
     sprintf(str_phi1, "%s/phi1", dir); // Building a complete file name
@@ -252,9 +258,9 @@ int main(int argc, char* argv[]){
     if(save_deposit || save_q || save_h || save_phi1 || save_phi2){
         fprintf(log_file,"\nCollision detected: %i", collision);
         if(collision){
-            fprintf(log_file,"\ncollision time: CT=%0.6f",CT);
+            fprintf(log_file,"\ncollision time: CT=%0.16f",CT);
             fprintf(log_file,"\ncollision index: CI=%5.1f",CI);
-            fprintf(log_file,"\ncollision position: CX=%0.6f",CX);
+            fprintf(log_file,"\ncollision position: CX=%0.16f",CX);
         }
         fprintf(log_file,"\n\nRun time was %.4f seconds.",runTime);
         fclose(log_file);
@@ -333,8 +339,10 @@ void initialize(){
     for(i=0;i<N+1;i++){
         q_[i]    = 0.;
         h_[i]    = squarewave(x_[i],-apart/2.0,cur1wid,fmax(0.,h1init-h_min),0.) + squarewave(x_[i],apart/2.0,cur2wid,fmax(0.,h2init-h_min),0.) + h_min;
-        phi1_[i] = squarewave(x_[i],-apart/2.0,cur1wid,c1init,0.)*h_[i];
-        phi2_[i] = squarewave(x_[i],apart/2.0,cur2wid,c2init,0.)*h_[i];
+        //phi1_[i] = squarewave(x_[i],-apart/2.0,cur1wid,c1init,0.)*h_[i];
+        //phi2_[i] = squarewave(x_[i],apart/2.0,cur2wid,c2init,0.)*h_[i];
+        phi1_[i] = c1init*h_[i];
+        phi2_[i] = c2init*h_[i];
          
     }
     avg_cell(h_,h); // Get cell averages
