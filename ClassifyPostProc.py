@@ -185,9 +185,7 @@ class TurbiditySim:
         animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
-    def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], ylim = None,framerate = 30., shape_factor = 1.0):
-        xlim[1] = xlim[1] if xlim[1] else self.x[-1]
-    
+    def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], framerate = 30., shape_factor = 1.0):
         fig,ax = plt.subplots(2,1,figsize=(6,4))
         line1, = ax[0].plot(self.x,self.h[0,:])
         line2, = ax[1].plot(self.x,self.h[0,:])
