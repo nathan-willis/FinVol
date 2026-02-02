@@ -209,7 +209,6 @@ class TurbiditySim:
         Plot2_SWline, = ax[1].plot(self.x,self.h[0,:])
         def func(t):
             h_SW = self.h[np.argmin(np.abs(self.T-t)),:]
-            #self.height_box_model(t,shape_factor=shape_factor,mp4=True,SWE_LC = 'tab:blue')
             Plot1_SWline.set_ydata(h_SW)
             Plot2_SWline.set_ydata(h_SW)
 
@@ -668,31 +667,34 @@ class TurbiditySim:
         self.B_vel = np.array(B_v)
         self.t_num = np.array(T)
 
-    def RH_plots(self, show=True,cutoff_init=0):
+    def RH_plots(self, show=True,cutoff_init=0,shape_factor=1.0):
         article_params()
         plt.figure(figsize = [7.5,7.5]) 
 
+        self.bore_data()
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_v = self.settling_RH_model(hmf=shape_factor)
+
         plt.subplot(221)
         plt.plot(self.t_post,self.hP_data,label = 'SW')
-        plt.plot(self.t_num[cutoff_init:],self.hP[cutoff_init:],label = 'Box')
+        plt.plot(t_num[cutoff_init:],hP[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$h^+$')
         plt.legend()
         plt.subplot(222)
         plt.plot(self.t_post,self.hM_data,label = 'SW')
-        plt.plot(self.t_num[cutoff_init:],self.hM[cutoff_init:],label = 'Box')
+        plt.plot(t_num[cutoff_init:],hM[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$h^-$')
         plt.legend()
         plt.subplot(223)
         plt.plot(self.t_post,self.uP_data,label = 'SW')
-        plt.plot(self.t_num[cutoff_init:],self.uP[cutoff_init:],label = 'Box')
+        plt.plot(t_num[cutoff_init:],uP[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel('$u^+$')
         plt.legend()
         plt.subplot(224)
         plt.plot(self.t_post,self.vel(self.bore),label = 'SW')
-        plt.plot(self.t_num[cutoff_init:],self.B_vel[cutoff_init:],label = 'Box')
+        plt.plot(t_num[cutoff_init:],B_v[cutoff_init:],label = 'Box')
         plt.xlabel('time')
         plt.ylabel("$\\frac{dx_b}{dt}$")
         plt.legend()
