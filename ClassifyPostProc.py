@@ -227,14 +227,15 @@ class TurbiditySim:
         L1,L2       = self.get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
         L1_SF,L2_SF = self.get_oneSided_boxModel_vertices(0,t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF)
         # Plot 1
-        Plot1_SWline, = ax[0].plot(self.x,self.h[0,:])
-        Plot1_BMline1, = ax[0].plot(L1[0],L1[1],linestyle = 'dashed',color ='k')
+        Plot1_SWline, = ax[0].plot(self.x,self.h[0,:],label = 'shallow water')
+        Plot1_BMline1, = ax[0].plot(L1[0],L1[1],linestyle = 'dashed',color ='k',label = 'box model')
         Plot1_BMline2, = ax[0].plot(L2[0],L2[1],linestyle = 'dashed',color ='k')
-        Plot1_BMline1_SF, = ax[0].plot(L1_SF[0],L1_SF[1],linestyle = 'dashed',color ='r')
+        Plot1_BMline1_SF, = ax[0].plot(L1_SF[0],L1_SF[1],linestyle = 'dashed',color ='r',label = 'box model, with shape factor')
         Plot1_BMline2_SF, = ax[0].plot(L2_SF[0],L2_SF[1],linestyle = 'dashed',color ='r')
         ax[0].set_xlim(self.coll_loc,self.x[-1])
         ax[0].set_ylim(-0.05,self.h.max()+0.05)
         ax[0].grid()
+        ax[0].legend()
         # Plot 2
         Plot2_SWline, = ax[1].plot(self.x,self.h[0,:])
         Plot2_BMline1, = ax[1].plot(L1[0],L1[1],linestyle = 'dashed',color ='k')
@@ -279,7 +280,8 @@ class TurbiditySim:
         anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
         Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
         VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWETEST_shapefactor%0.1f_"%shape_factor
-        anim.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
+        tMaxString = '_tMax%i'%tMax if tMax<100 else ''
+        anim.save(VidPath + self.fileName.replace('.','_') + tMaxString + '.mp4', writer = Writ)
         plt.close()
 
     def plot_height_conc_time(self,desired_time,xlim = None,cb=True,cb_choice='initial',cm='BrBG'):
