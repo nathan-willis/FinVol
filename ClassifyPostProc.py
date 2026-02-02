@@ -186,17 +186,32 @@ class TurbiditySim:
         plt.close()
 
     def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], framerate = 30., shape_factor = 1.0):
+        '''
+        This function generates an mp4 coomparing shallow-water data to box model. 
+        There are two subplots in the mp4, the first (top) is an a fixed axis,
+        which is everything to the right of the collision point;
+        the second (bottom) has dynamic axes so that the current, to the right of the
+        collision point, fills the view. 
+
+        The no shape factor case (shape_factor=1) is always shown, and a second version
+        with a shape_factor (shape_factor = 0.9 is default) is also plotted.
+        '''
+        article_params()
+        plt.rcParams.update({"text.usetex":False})
+    
         fig,ax = plt.subplots(2,1,figsize=(6,4))
-        line1, = ax[0].plot(self.x,self.h[0,:])
-        line2, = ax[1].plot(self.x,self.h[0,:])
+        # Plot 1
+        Plot1_SWline, = ax[0].plot(self.x,self.h[0,:])
         ax[0].set_xlim(self.coll_loc,self.x[-1])
         ax[0].set_ylim(-0.05,self.h.max()+0.05)
-  
+        ax[0].grid()
+        # Plot 2
+        Plot2_SWline, = ax[1].plot(self.x,self.h[0,:])
         def func(t):
             h_SW = self.h[np.argmin(np.abs(self.T-t)),:]
             #self.height_box_model(t,shape_factor=shape_factor,mp4=True,SWE_LC = 'tab:blue')
-            line1.set_ydata(h_SW)
-            line2.set_ydata(h_SW)
+            Plot1_SWline.set_ydata(h_SW)
+            Plot2_SWline.set_ydata(h_SW)
 
             ax[1].set_xlim(self.coll_loc,max(5,self.x[np.argwhere(h_SW>2*self.h_min)[-1][0]]+0.2))
             ax[1].set_ylim(h_SW.min(),h_SW.max())
@@ -205,7 +220,7 @@ class TurbiditySim:
             #plt.text((xlim[0]+xlim[1])/2 if xlim else 0., ymax + 0.1*(ymax-ymin),timeStr,verticalalignment = 'center',horizontalalignment = 'center')
 
             print('t = %0.2f'%(t))
-            return line1,line2
+            return Plot1_SWline,Plot2_SWline
     
 
         anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
