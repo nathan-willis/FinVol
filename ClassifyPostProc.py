@@ -224,21 +224,47 @@ class TurbiditySim:
         fig,ax = plt.subplots(2,1,figsize=(6,4))
         t_num,   xN,   xB,   hP,   hM,   uP,   cM,   cP,   B_v    = self.settling_RH_model(hmf = 1.0)
         t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF,uP_SF,cM_SF,cP_SF,B_v_SF = self.settling_RH_model(hmf = shape_factor) # SF subscript to denote shape factor
-        #L1,L2       = get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
-        #L1_SF,L2_SF = get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
+        L1,L2       = self.get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
+        L1_SF,L2_SF = self.get_oneSided_boxModel_vertices(0,t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF)
         # Plot 1
         Plot1_SWline, = ax[0].plot(self.x,self.h[0,:])
-        #Plot1_BMline1, = ax[0].plot(linestyle = 'dashed',color ='k')
-        #Plot1_BMline2, = ax[0].plot(linestyle = 'dashed',color ='r')
+        Plot1_BMline1, = ax[0].plot(L1[0],L1[1],linestyle = 'dashed',color ='k')
+        Plot1_BMline2, = ax[0].plot(L2[0],L2[1],linestyle = 'dashed',color ='k')
+        Plot1_BMline1_SF, = ax[0].plot(L1_SF[0],L1_SF[1],linestyle = 'dashed',color ='r')
+        Plot1_BMline2_SF, = ax[0].plot(L2_SF[0],L2_SF[1],linestyle = 'dashed',color ='r')
         ax[0].set_xlim(self.coll_loc,self.x[-1])
         ax[0].set_ylim(-0.05,self.h.max()+0.05)
         ax[0].grid()
         # Plot 2
         Plot2_SWline, = ax[1].plot(self.x,self.h[0,:])
+        Plot2_BMline1, = ax[1].plot(L1[0],L1[1],linestyle = 'dashed',color ='k')
+        Plot2_BMline2, = ax[1].plot(L2[0],L2[1],linestyle = 'dashed',color ='k')
+        Plot2_BMline1_SF, = ax[1].plot(L1_SF[0],L1_SF[1],linestyle = 'dashed',color ='r')
+        Plot2_BMline2_SF, = ax[1].plot(L2_SF[0],L2_SF[1],linestyle = 'dashed',color ='r')
         def func(t):
+            L1,L2       = self.get_oneSided_boxModel_vertices(t,t_num,xN,xB,hP,hM)
+            L1_SF,L2_SF = self.get_oneSided_boxModel_vertices(t,t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF)
             h_SW = self.h[np.argmin(np.abs(self.T-t)),:]
+            # Plot 1 update
             Plot1_SWline.set_ydata(h_SW)
+            Plot1_BMline1.set_xdata(L1[0])
+            Plot1_BMline1.set_ydata(L1[1])
+            Plot1_BMline2.set_xdata(L2[0])
+            Plot1_BMline2.set_ydata(L2[1])
+            Plot1_BMline1_SF.set_xdata(L1_SF[0])
+            Plot1_BMline1_SF.set_ydata(L1_SF[1])
+            Plot1_BMline2_SF.set_xdata(L2_SF[0])
+            Plot1_BMline2_SF.set_ydata(L2_SF[1])
+            # Plot 2 update
             Plot2_SWline.set_ydata(h_SW)
+            Plot2_BMline1.set_xdata(L1[0])
+            Plot2_BMline1.set_ydata(L1[1])
+            Plot2_BMline2.set_xdata(L2[0])
+            Plot2_BMline2.set_ydata(L2[1])
+            Plot2_BMline1_SF.set_xdata(L1_SF[0])
+            Plot2_BMline1_SF.set_ydata(L1_SF[1])
+            Plot2_BMline2_SF.set_xdata(L2_SF[0])
+            Plot2_BMline2_SF.set_ydata(L2_SF[1])
 
             ax[1].set_xlim(self.coll_loc,max(5,self.x[np.argwhere(h_SW>2*self.h_min)[-1][0]]+0.2))
             ax[1].set_ylim(h_SW.min(),h_SW.max())
@@ -247,7 +273,7 @@ class TurbiditySim:
             #plt.text((xlim[0]+xlim[1])/2 if xlim else 0., ymax + 0.1*(ymax-ymin),timeStr,verticalalignment = 'center',horizontalalignment = 'center')
 
             print('t = %0.2f'%(t))
-            return Plot1_SWline,Plot2_SWline
+            return Plot1_SWline, Plot2_SWline, Plot1_SWline, Plot1_BMline1, Plot1_BMline2, Plot1_BMline1_SF, Plot2_BMline1, Plot2_BMline2, Plot2_BMline1_SF, Plot2_BMline2_SF
     
 
         anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
