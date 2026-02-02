@@ -279,7 +279,7 @@ class TurbiditySim:
 
         anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
         Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
-        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWETEST_shapefactor%0.1f_"%shape_factor
+        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWE_shapefactor%0.1f_"%shape_factor
         tMaxString = '_tMax%i'%tMax if tMax<100 else ''
         anim.save(VidPath + self.fileName.replace('.','_') + tMaxString + '.mp4', writer = Writ)
         plt.close()
@@ -448,6 +448,15 @@ class TurbiditySim:
         return self.T[np.argwhere(suspended_pct > 0.05)[-1][0]]
 
     def bore_data(self,subSampleBy=1,all_var=True,t_start=0,plot=False,save = True):
+        def average_cp_cm(self,xB,CR_temp,front):
+            def avg(f,a,b):
+                f_int = (self.dx/2)*np.sum(f[:-1]+f[1:])
+                return f_int/(b-a)
+            b_idx = np.argmin(np.abs(self.x-xB))
+            a_bd = self.x[CR_temp>0.1*CR_temp.max()][0]
+            cp = CR_temp[b_idx:]
+            cm = CR_temp[:b_idx]
+            return avg(cm,a_bd,xB),avg(cp,xB,front)
         try: 
             C=np.loadtxt(self.rootFile + 'solutions/postData/post_collision_bore_data_'+ self.fileName + '.csv',delimiter=',')
             t_post = C[:,0]
@@ -455,13 +464,15 @@ class TurbiditySim:
             h_plus,   h_minus   = C[:,2], C[:,3]
             u_plus,   u_minus   = C[:,4], C[:,5]
             h_plus_avg,   h_minus_avg   = C[:,6], C[:,7]
-            front = C[:,8]
+            c_plus_avg,   c_minus_avg   = C[:,8], C[:,9]
+            front = C[:,10]
         except OSError: 
             print('cannot open, so I will post process the data MYSELF!')
             t_post = []
             u_plus, u_minus = [],[]
             h_plus, h_minus = [],[]
             h_plus_avg, h_minus_avg = [],[]
+            c_plus_avg, c_minus_avg = [],[]
             bore, front = [],[]
 
             dt = self.T[1]-self.T[0]
@@ -469,9 +480,10 @@ class TurbiditySim:
             h_max = 0 # Intialize h_max to be 0, so that at the first iteration it will be smaller than actual h_max and replaced with h_max
             bore_index = self.coll_idx # Initialize the bore index as the collision index
 
-            for t,u_fake,h_fake in zip(self.T,self.u,self.h):
+            for t,u_fake,h_fake,c_fake in zip(self.T,self.u,self.h,self.c2):
                 u_ = deepcopy(u_fake) # It appeared that within this loop the data was getting overwritten with u_ (which does not make sense), the deepcopy forces this to NOT happen
                 h_ = deepcopy(h_fake) # Same as above
+                c_ = deepcopy(c_fake) # Same as above
                 window_size = int(self.N*0.0025) # Create a "viewing window" so that the search for the bore is only local to the previous bore. 
                 if (not post_collision) and h_[bore_index]>2*self.h_min and np.max(h_)<h_max and self.x[np.argmax(h_)]<2 and t>t_start:
                     '''
@@ -507,7 +519,6 @@ class TurbiditySim:
                     if bore_loc < 0.2: continue
                     h_minus_temp, h_plus_temp = h_bore[u_mbi], h_bore[u_pbi]
                     new_thresh = (h_minus_temp+h_plus_temp)/2
-                    print(h_minus_temp,h_plus_temp,new_thresh)
                     #bore_local_index = np.argwhere(h_bore>new_thresh)[-1][0]
 
                     #bore_local_loc = (x_bore[bore_local_index]-x_bore[bore_local_index+1])*(new_thresh-h_bore[bore_local_index+1])/(h_bore[bore_local_index]-h_bore[bore_local_index+1])+x_bore[bore_local_index+1] # Linear approximation between nodes values for height immediately above/below threshold
@@ -522,11 +533,15 @@ class TurbiditySim:
 
                     front_loc = self.x[front_index]
                    
+                    cmA, cpA = average_cp_cm(self,bore_loc,c_,front_loc)
+                    print(t,cpA,cmA)
                     
                     HMA = np.sum(h_[self.coll_idx:bore_index])*self.dx/(bore_loc-self.coll_loc)
                     HPA = np.sum(h_[bore_index:front_index])*self.dx/(front_loc-bore_loc)
                     h_minus_avg.append(HMA)
                     h_plus_avg.append(HPA)
+                    c_minus_avg.append(cmA)
+                    c_plus_avg.append(cpA)
                     bore.append(bore_loc)
                     #front_loc = (x[front_index]-x[front_index+1])*(2*h_min-h_[front_index+1])/(h_[front_index]-h_[front_index+1])+x[front_index+1]
                     front.append(front_loc)
@@ -541,7 +556,7 @@ class TurbiditySim:
 
                     plt.legend()
     
-            array_to_save=np.array((np.array(t_post),np.array(bore),np.array(h_plus),np.array(h_minus),np.array(u_plus),np.array(u_minus),np.array(h_plus_avg),np.array(h_minus_avg),np.array(front))).T
+            array_to_save=np.array((np.array(t_post),np.array(bore),np.array(h_plus),np.array(h_minus),np.array(u_plus),np.array(u_minus),np.array(h_plus_avg),np.array(h_minus_avg),np.array(c_plus_avg),np.array(c_minus_avg),np.array(front))).T
             if save: np.savetxt(self.rootFile + 'solutions/postData/post_collision_bore_data_' + self.fileName + '.csv',array_to_save,delimiter=',')
         def subsample(x,subSampleBy = subSampleBy):
             x = np.array(x)
@@ -550,6 +565,7 @@ class TurbiditySim:
         self.bore = subsample(bore)
         self.hP_data, self.hM_data = subsample(h_plus),subsample(h_minus)
         self.hP_data_avg, self.hM_data_avg = subsample(h_plus_avg),subsample(h_minus_avg)
+        self.cP_data_avg, self.cM_data_avg = subsample(c_plus_avg),subsample(c_minus_avg)
         self.uP_data, self.uM_data = subsample(u_plus),subsample(u_minus)
         self.front_data = subsample(front)
 
@@ -917,6 +933,18 @@ class TurbiditySim:
 
         plt.xlabel('time (t=0 is collision)')
         plt.ylabel('position of equal concentration (0 is collision)')
+    def compare_conc(self,shape_factor=1.):
+        article_params()
+        self.bore_data()
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_vel  = self.settling_RH_model(hmf = shape_factor)
+        plt.plot(self.t_post,self.cM_data_avg,label='average $c_-$, SW')
+        plt.plot(self.t_post,self.cP_data_avg,label='average $c_+$, SW')
+        plt.plot(t_num,cM,linestyle='dashed',color='tab:blue',  label='$c_-$, Box')
+        plt.plot(t_num,cP,linestyle='dashed',color='tab:orange',label='$c_+$, Box')
+        plt.legend()
+        plt.title('settling, $u_s=$%0.2f'%self.U_s)
+        plt.xlabel('time')
+        plt.ylabel('concentration')
 
 def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
     '''
@@ -998,7 +1026,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.plot(t_num,B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
-        legend_list.append('$U_s=$%0.3f'%(sim.U_s))
+        legend_list.append('$U_s=$%0.2f'%(sim.U_s))
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
@@ -1023,7 +1051,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.xlabel('time, $t$')
         plt.ylabel('concentration')
         
-        legend_list.append('$U_s=$%0.3f'%(sim.U_s))
+        legend_list.append('$U_s=$%0.2f'%(sim.U_s))
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
@@ -1034,6 +1062,18 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     plt.subplots_adjust(left=0.09,bottom=0.19,top=0.97,right=0.78)
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
+    plt.close()
+
+    plt.figure(figsize=[5.125,2.])
+    plt.subplot(121)
+    Sims[1].compare_conc()
+    plt.subplot(122)
+    Sims[2].compare_conc()
+    plt.tight_layout()
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_CompareConc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
+    plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_CompareConc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
+    plt.close()
+    return Sims
 
 def suspended_concentration(US, RootFile):
     def print_latex_line(label,l):
