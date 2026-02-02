@@ -954,28 +954,29 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
     Here, settling is assumed to be 0, and the asymmetry is varied.
     in Box_SWE_Settling(), the settling is nonzero, but the currents are symmetric.
     '''
+    article_params()
+    plt.rcParams.update({'lines.linewidth':1})
     if Sims == None:
         Sims = []
         for sim in SimVars:
             Sims.append(TurbiditySim(sim[0],sim[1],0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
     
-    article_params()
     plt.figure(figsize=[5.125,3])
     legend_list = ['SW','Box','']
     legend_colors = ['k']*2 + ['white']
     legend_linestyles = list(mpllinestyles[:2]) + ['solid']
     for i,sim in enumerate(Sims):
         sim.bore_data()
-        sim.RH_model(hmf=shape_factor)
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = sim.settling_RH_model(hmf=shape_factor)
         plt.subplot(211)
         plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(sim.t_num,sim.B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.plot(t_num,B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(sim.t_num,sim.xB,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel('position, $x_b$')
         legend_list.append('$h_0$=%0.2f, $c_0$=%0.2f'%(sim.hR0,sim.cR0))
@@ -1001,28 +1002,29 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     Here, settling is nonzero, but the currents are symmetric,
     in Box_SWE_Asym(), the settling is 0, but the currents are asymmetric.
     '''
+    article_params()
+    plt.rcParams.update({'lines.linewidth':1})
     if Sims == None:
         Sims = []
         for us in U_s:
             Sims.append(TurbiditySim(1.0,1.0,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
     
-    article_params()
     plt.figure(figsize=[5.125,3.])
     legend_list = ['SW','Box','']
     legend_colors = ['k']*2 + ['white']
     legend_linestyles = list(mpllinestyles[:2]) + ['solid']
     for i,sim in enumerate(Sims):
         sim.bore_data()
-        sim.settling_RH_model(hmf=shape_factor,dt=dt)
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = sim.settling_RH_model(hmf=shape_factor,dt=dt)
         plt.subplot(211)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(sim.t_num,sim.xB,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel('position, $x_b$')
         
         plt.subplot(212)
         plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(sim.t_num,sim.B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.plot(t_num,B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         legend_list.append('$U_s=$%0.3f'%(sim.U_s))
@@ -1044,9 +1046,9 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     legend_linestyles = list(mpllinestyles[:2]) + ['solid']
     for i,sim in enumerate(Sims):
         sim.bore_data()
-        sim.settling_RH_model(hmf=shape_factor,dt=dt)
-        plt.plot(sim.t_num,sim.cM,color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(sim.t_num,sim.cP,color=tabcolors[i],linestyle = mpllinestyles[1])
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = sim.settling_RH_model(hmf=shape_factor,dt=dt)
+        plt.plot(t_num,cM,color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(t_num,cP,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel('concentration')
         
