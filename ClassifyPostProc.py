@@ -185,7 +185,29 @@ class TurbiditySim:
         animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
-    def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], framerate = 30., shape_factor = 1.0):
+    def get_oneSided_boxModel_vertices(self,t,T,xN,xB,hP,hM):
+        '''
+        Given vectors for time, xB (bore pos.), xN (front/nose pos.)
+        hP (h_plus), and hM (h_minus) return the vertices for the 2 lines
+        that can draw the one-sided box model.
+
+        I return 2 separate lists to draw two lines, becuase one long list will
+        double draw the box in some region, which is fine for soild lines, but 
+        is noticeable for dashed lines. 
+  
+        WARNING! t is the original time, but T is shift so that T=0 is coll. 
+        t-self.coll_time shifts t to be in the same time frame as T.
+        '''
+        if t<self.coll_time:
+            return [[None]*4]*2,[[None]*3]*2
+        idx = np.argmin(np.abs(T-(t-self.coll_time)))
+        xb,xn = xB[idx],xN[idx]
+        hp,hm = hP[idx],hM[idx]
+        xc = self.coll_loc
+        
+        return [[xc,xn,xn,xb],[0,0,hp,hp]],[[xc,xb,xb],[hm,hm,0]]
+    
+    def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], framerate = 30., shape_factor = 0.9):
         '''
         This function generates an mp4 coomparing shallow-water data to box model. 
         There are two subplots in the mp4, the first (top) is an a fixed axis,
@@ -200,8 +222,14 @@ class TurbiditySim:
         plt.rcParams.update({"text.usetex":False})
     
         fig,ax = plt.subplots(2,1,figsize=(6,4))
+        t_num,   xN,   xB,   hP,   hM,   uP,   cM,   cP,   B_v    = self.settling_RH_model(hmf = 1.0)
+        t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF,uP_SF,cM_SF,cP_SF,B_v_SF = self.settling_RH_model(hmf = shape_factor) # SF subscript to denote shape factor
+        #L1,L2       = get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
+        #L1_SF,L2_SF = get_oneSided_boxModel_vertices(0,t_num,xN,xB,hP,hM)
         # Plot 1
         Plot1_SWline, = ax[0].plot(self.x,self.h[0,:])
+        #Plot1_BMline1, = ax[0].plot(linestyle = 'dashed',color ='k')
+        #Plot1_BMline2, = ax[0].plot(linestyle = 'dashed',color ='r')
         ax[0].set_xlim(self.coll_loc,self.x[-1])
         ax[0].set_ylim(-0.05,self.h.max()+0.05)
         ax[0].grid()
@@ -497,7 +525,7 @@ class TurbiditySim:
         self.uP_data, self.uM_data = subsample(u_plus),subsample(u_minus)
         self.front_data = subsample(front)
 
-    def settling_RH_model(self, t0=0, dt=0.001, final=np.inf, hpf=1, upf=1, hmf=1, tol=1e-14):
+    def settling_RH_model(self, t0=0, dt=0.001, final=np.inf, hmf=1, tol=1e-14):
         def get_collision_concentration():
             collision_time_index = np.argmin(np.abs(self.T-self.coll_time))
             CR_temp = self.c2[collision_time_index,:]
@@ -515,8 +543,8 @@ class TurbiditySim:
     
         print('\n' + '*'*43 + '\n* t0  = %0.5f---initial time \n* xb0 = %0.5f---initial bore position\n* uN  = %0.5f---front velocity\n* xi  = %0.5f---center of initial current\n* V   = %0.5f---volume of right current\n* xc  = %0.5f---collision point\n* cC  = %0.5f---initial concentration\n'%(t0,xC,uN,xI,VR,xC,cC) + '*'*43 + '\n')
     
-        h_plus  = lambda x_N     : VR/(2*(x_N-xI))*hpf # V here is the initial volume of the right current, NOT the dyanmic V_plus
-        u_plus  = lambda x_N,x_B : uN/(x_N-xI)*(x_B-xI)*upf
+        h_plus  = lambda x_N     : VR/(2*(x_N-xI)) # V here is the initial volume of the right current, NOT the dyanmic V_plus
+        u_plus  = lambda x_N,x_B : uN/(x_N-xI)*(x_B-xI)
         h_minus = lambda x_N,x_B : h_plus(x_N)*(1 + (x_N-(2*xI-xC))/(x_B-xC))*hmf
         V_plus  = lambda x_N,x_B : h_plus(x_N)*(x_N-x_B)
         V_minus = lambda x_N,x_B : h_minus(x_N,x_B)*(x_B-xC)
@@ -545,7 +573,7 @@ class TurbiditySim:
                 from scipy.optimize import fsolve
                 fv   = lambda v: 2*v**2*(v+uN) - hmf*hP_*cC*(v+hmf*v+hmf*uN)
                 ub   = fsolve(fv,0.5)[0]
-                hM_  = hP_*(1 + uN/ub)*hpf
+                hM_  = hP_*(1 + uN/ub)
                 zeta = -1#(uN-ub)/(uN+ub)
                 dcM  = us*cC/(1-zeta)*(zeta/hP_-1/hM_)
                 print('\nh_minus(0) = %0.6f\nub(0)  = %0.6f\ndcM(0) = %0.6f'%(hM_,ub,dcM))
