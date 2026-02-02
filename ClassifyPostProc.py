@@ -581,17 +581,19 @@ class TurbiditySim:
     
             t+=dt
     
-        self.hP= np.array(hP)
-        self.hM= np.array(hM)
-        self.uP= np.array(uP)
+        #self.hP= np.array(hP)
+        #self.hM= np.array(hM)
+        #self.uP= np.array(uP)
     
-        self.xN = np.array(xN)
-        self.xB = np.array(xB)
-        self.cM = np.array(cM)
-        self.cP = np.array(cP)
-        self.B_vel = np.array(B_v)
-        self.t_num = np.array(T)
+        #self.xN = np.array(xN)
+        #self.xB = np.array(xB)
+        #self.cM = np.array(cM)
+        #self.cP = np.array(cP)
+        #self.B_vel = np.array(B_v)
+        #self.t_num = np.array(T)
 
+        return np.array(T),np.array(xN),np.array(xB),np.array(hP),np.array(hM),np.array(uP),np.array(cM),np.array(cP),np.array(B_v)
+         
     def RH_model(self, t0=0, dt=0.001, final=np.inf, hpf=1, upf=1, hmf=1, tol=1e-14):
         self.front_vel()
         xC = self.coll_loc # xC is the collision point. 
@@ -762,15 +764,13 @@ class TurbiditySim:
         plt.plot([front_pos]*2,[0, hp],color = 'k',linestyle = 'dashed',linewidth = 2)
      
     def height_box_model(self,desired_time,shape_factor=1.0,mp4=False,SWE_LC = None):
-        try: 
-            self.t_num
-        except AttributeError:
-            self.RH_model(hmf=shape_factor)
-        idx = np.argmin(np.abs(self.t_num - (desired_time-self.coll_time)))
-        bore_pos = self.xB[idx]
-        front_pos = self.xN[idx]
-        hp = self.hP[idx]
-        hm = self.hM[idx]
+        t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = self.settling_RH_model(hmf=shape_factor)
+        idx = np.argmin(np.abs(t_num - (desired_time-self.coll_time)))
+
+        bore_pos  = xB[idx]
+        front_pos = xN[idx]
+        hp = hP[idx]
+        hm = hM[idx]
         x_upper_bound = np.ceil(1.05*front_pos)
 
         self.plot_time('h', desired_time,color=SWE_LC)
@@ -1059,40 +1059,6 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     plt.subplots_adjust(left=0.09,bottom=0.19,top=0.97,right=0.78)
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_Conc_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
-
-def test_plots(T):
-    #T = TurbiditySim(1.0,1.0,0.0,'Jul16_BoxModel/',['h','u','c1','c2'],N=20000,sharp = 200)
-    T.RH_model()
-    T.RH_model_OLD()
-    
-    plt.subplot(221)
-    plt.plot(T.t_post,T.hP_data,label = 'SW')
-    plt.plot(T.t_post,T.hP_model,label = 'Box')
-    plt.xlabel('time')
-    plt.ylabel('$h^+$')
-    plt.legend()
-    plt.subplot(222)
-    plt.plot(T.t_post,T.hM_data,label = 'SW')
-    plt.plot(T.t_post,T.hM_model,label = 'Box')
-    plt.xlabel('time')
-    plt.ylabel('$h^-$')
-    plt.legend()
-    plt.subplot(223)
-    plt.plot(T.t_post,T.uP_data,label = 'SW')
-    plt.plot(T.t_post,T.uP_model,label = 'Box')
-    plt.xlabel('time')
-    plt.ylabel('$u^+$')
-    plt.legend()
-    plt.subplot(224)
-    plt.plot(T.t_post,T.vel(T.bore),label = 'SW')
-    plt.plot(T.t_post,T.vel(T.bore_model),label = 'Box')
-    plt.xlabel('time')
-    plt.ylabel("$S'(t)$")
-    plt.legend()
- 
-    plt.tight_layout()
-
-    plt.show()
 
 def suspended_concentration(US, RootFile):
     def print_latex_line(label,l):
