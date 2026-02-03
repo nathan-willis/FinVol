@@ -6,6 +6,7 @@ if float(str(sys.version_info[1]) + '.' + str(sys.version_info[2])) <= 9.1:
 else:
     from matplotlib import colormaps as cm
 import matplotlib.animation as ani
+from matplotlib.patches import Rectangle, FancyArrowPatch
 from celluloid import Camera
 from os import getcwd
 import seaborn as sns
@@ -780,34 +781,60 @@ class TurbiditySim:
         up = self.uP_data[idx]
         um = self.uM_data[idx]
         x_upper_bound = np.ceil(1.05*front_pos)
-
+    
         article_params()
-        plt.figure(figsize=[6.5,1.3])
-        plt.subplot(121)
+        plt.figure(figsize=[5.125,4])
+    
+        # Plot 1, height plot with h+,h-,xN,xB labeled
+        plt.subplot(311)
         self.plot_time('h', time, xlim=[0,x_upper_bound])
-        plt.plot([bore_pos]*2,[0, hm],color = 'k',linestyle = 'dashed',linewidth = 2)
-        plt.plot([0, bore_pos],2*[hm],color = 'k',linestyle = 'dashed',linewidth = 2)
-        plt.plot([0, front_pos],2*[0],color = 'k',linestyle = 'dashed',linewidth = 2)
-        plt.plot([bore_pos, front_pos],2*[hp],color = 'k',linestyle = 'dashed',linewidth = 2)
-        plt.plot([front_pos]*2,[0, hp],color = 'k',linestyle = 'dashed',linewidth = 2)
-
-        plt.annotate('$h_-$',xy=(bore_pos+0.02*x_upper_bound,hm),xytext=(bore_pos + 0.15*x_upper_bound,hm), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$h_+$',xy=(bore_pos-0.02*x_upper_bound,hp),xytext=(bore_pos - 0.15*x_upper_bound,hp), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$x_b$',xy=(bore_pos,plt.gca().get_ylim()[0]),xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*(plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0])), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$x_N$',xy=(front_pos,plt.gca().get_ylim()[0]),xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*(plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0])), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        #self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
+    
+        AP = dict(facecolor='black',width = 1, headwidth = 6,headlength=8) #Arrow properties for annotation
+        yb_min = plt.gca().get_ylim()[0] # yb is y bounds, so I want the y bound minimum
+        yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
+        plt.annotate('$h_-$',xy=(bore_pos+0.02*x_upper_bound,hm), xytext=(bore_pos + 0.15*x_upper_bound,hm),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
+        plt.annotate('$h_+$',xy=(bore_pos-0.02*x_upper_bound,hp), xytext=(bore_pos - 0.15*x_upper_bound,hp),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
+        plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
+        plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.gca().set_xticks([0,5,10])
          
-
-        plt.subplot(122)
+        # Plot 2, velocity plot with u+,u-,xN,xB labeled
+        plt.subplot(312)
         self.plot_time('u', time, xlim=[0,x_upper_bound])
+        #self.plot_time('u', time, xlim=[-x_upper_bound,x_upper_bound])
         plt.xlabel('$x$')
-        plt.annotate('$u_+$',xy=(bore_pos+0.02*x_upper_bound,up),xytext=(bore_pos + 0.15*x_upper_bound,up), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$u_-$',xy=(bore_pos-0.02*x_upper_bound,um),xytext=(bore_pos - 0.15*x_upper_bound,um), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$x_b$',xy=(bore_pos,plt.gca().get_ylim()[0]),xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*(plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0])), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        yb_min = plt.gca().get_ylim()[0]
+        yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
+        plt.annotate('$u_+$',xy=(bore_pos+0.02*x_upper_bound,up), xytext=(bore_pos + 0.15*x_upper_bound,up),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
+        plt.annotate('$u_-$',xy=(bore_pos-0.02*x_upper_bound,um), xytext=(bore_pos - 0.15*x_upper_bound,um),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
+        plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
+        plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.gca().set_xticks([0,5,10])
-        plt.annotate('$x_N$',xy=(front_pos,plt.gca().get_ylim()[0]),xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*(plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0])), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-
-        plt.subplots_adjust(left = 0.07,right = 0.99, bottom = 0.3, top = 0.98,wspace = 0.15)
+    
+        # Plot 3, schematic for box model with "ghost" box drawn
+        plt.subplot(313)
+        self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
+        yb_min = plt.gca().get_ylim()[0]
+        yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
+        plt.annotate('$x_b$',xy=(bore_pos, yb_min), xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
+        plt.annotate('$x_N$',xy=(front_pos,yb_min), xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
+        plt.annotate('$2x_i-x_N$',xy=(self.apart-front_pos,yb_min), xytext=(self.apart-front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
+        L1,L2 = self.get_oneSided_boxModel_vertices(time,self.t_post,self.front_data,self.bore,self.hP_data,self.hM_data)
+        plt.plot(L1[0],L1[1],linestyle='dashed',linewidth=2,color='k')
+        plt.plot(L2[0],L2[1],linestyle='dashed',linewidth=2,color='k')
+        plt.plot([self.coll_loc]*2,[0,hm],linestyle = 'dashed',linewidth=1,color='k')
+        plt.plot([self.coll_loc,self.apart-front_pos,self.apart-front_pos,bore_pos],[0,0,hp,hp],linestyle = 'dashed',linewidth=1,color='k')
+        yRad = 0.75*(hm-hp)
+        window_ratio = plt.gca().get_window_extent().height/plt.gca().get_window_extent().width # ratio of the axis window for the y axis to the x axis
+        data_ratio = plt.gca().get_data_ratio() # ratio of the data range for the y axis to the x axis. 
+        xRad = yRad*window_ratio/data_ratio
+        ghost_box_color = 'tab:red'
+        plt.gca().add_patch(Rectangle((self.apart-front_pos,0),front_pos-self.apart,hp,alpha=0.7,color=ghost_box_color))
+        plt.gca().add_patch(Rectangle((self.coll_loc,hp),bore_pos-self.coll_loc,hm-hp,alpha=0.7,color=ghost_box_color))
+        plt.gca().add_patch(FancyArrowPatch((self.coll_loc-xRad,hp), (self.coll_loc,hp+yRad),connectionstyle="arc3,rad=-0.55",arrowstyle="simple,head_width=6,head_length=8",linewidth=2,color=ghost_box_color))
+    
+        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45) 
         if show:
             plt.show()
         else:
@@ -1596,15 +1623,25 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
     NumericalValidation_CFL()
 
 def article_plots():
+    article_params()
     # Figure 1,  Example solution for numerics discussion
+
     # Figure 2,  Numerical validation for spatial resolution
+
     # Figure 3,  Numerical validation for Reynolds number
+
     # Figure 4,  Results - solution profile
+
     # Figure 5,  Results - Space time plot
+
     # Figure 6,  Sediment deposition - example solutions
+
     # Figure 7,  Sediment deposition - Encroachment mass colormap
+
     # Figure 8,  Sediment deposition - Encroachment mass 3D view with planar approximation
+
     # Figure 9,  Box model - schematic
+
     # Figure 10, Box model - results - asymmetric currents with no shape factor
     Box_SWE_Asym()
     # Figure 11, Box model - results - asymmetric currents with shape factor = 0.9
