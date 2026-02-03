@@ -1596,4 +1596,18 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
     NumericalValidation_CFL()
 
 def article_plots():
-    pass
+    # Figure 1,  Example solution for numerics discussion
+    # Figure 2,  Numerical validation for spatial resolution
+    # Figure 3,  Numerical validation for Reynolds number
+    # Figure 4,  Results - solution profile
+    # Figure 5,  Results - Space time plot
+    # Figure 6,  Sediment deposition - example solutions
+    # Figure 7,  Sediment deposition - Encroachment mass colormap
+    # Figure 8,  Sediment deposition - Encroachment mass 3D view with planar approximation
+    # Figure 9,  Box model - schematic
+    # Figure 10, Box model - results - asymmetric currents with no shape factor
+    Box_SWE_Asym()
+    # Figure 11, Box model - results - asymmetric currents with shape factor = 0.9
+    Box_SWE_Asym(shape_factor=0.9)
+    # Figure 12
+    Box_SWE_Settling()
