@@ -80,7 +80,10 @@ class TurbiditySim:
         self.fileName = "hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_NuPe%i_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%i"%(self.hL0,self.hR0,self.cL0,self.cR0,self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.NuPe,self.FrSquared,self.U_s,self.h_min,self.sharp)
         
         self.unpack(VARS)
-        self.dt = self.T[1]-self.T[0]
+        try:
+            self.dt = self.T[1]-self.T[0]
+        except IndexError:
+            self.dt = np.nan
         self.dx = self.x[1]-self.x[0]
         with open(self.rootFile + self.subFile + self.fileName + '/info.log') as fh:
             for line in fh:
@@ -371,16 +374,16 @@ class TurbiditySim:
         self.xl = self.x[int(self.N*0.2):self.coll_idx+1]
         self.r2l = self.d2[-1,int(self.N*0.2):self.coll_idx+1]
 
-        two_sided_intrusion = np.hstack([self.r2l,self.l2r])
+        two_sided_encroachment = np.hstack([self.r2l,self.l2r])
         two_sided_x = np.hstack([self.xl,self.xr])
         
         l2r_mass = np.sum(self.l2r)*dx
         r2l_mass = np.sum(self.r2l)*dx
  
-        #self.intrusion_mass = l2r_mass if l2r_mass >= r2l_mass else r2l_mass
+        #self.encroachment_mass = l2r_mass if l2r_mass >= r2l_mass else r2l_mass
         #self.COM_x = np.sum(self.xr*self.l2r)*dx/l2r_mass if l2r_mass >= r2l_mass else np.sum(self.xl*self.r2l)*dx/r2l_mass
-        self.intrusion_mass = l2r_mass - r2l_mass
-        self.COM_x = np.sum(two_sided_x*two_sided_intrusion)*dx/(l2r_mass + r2l_mass)
+        self.encroachment_mass = l2r_mass - r2l_mass
+        self.COM_x = np.sum(two_sided_x*two_sided_encroachment)*dx/(l2r_mass + r2l_mass)
 
     def plot_deposit(self, LS = 'solid'):
         plt.plot(self.x,self.d1[-1,:],label='$d_1(x), U_s = %0.3f$'%self.U_s,color = 'tab:blue', linestyle = LS)
@@ -418,14 +421,14 @@ class TurbiditySim:
         if close: plt.close()
 
 
-    def plot_intrusion(self,wantLegend=True, want_y_label=True):
+    def plot_encroachment(self,wantLegend=True, want_y_label=True):
         try:
-            self.intrustion_mass
+            self.encroachment_mass
         except AttributeError:
             self.deposition_details()
         plt.plot(self.xl,self.r2l,label = 'right-to-left: $d_2(x), x>x_c$')
         plt.plot(self.xr,self.l2r,label = 'left-to-right: $d_1(x), x<x_c$')
-        #plt.scatter(self.COM_x,self.intrusion_mass,)
+        #plt.scatter(self.COM_x,self.encroachment_mass,)
         plt.plot([self.coll_loc]*2,[0,max(np.max(self.l2r),np.max(self.r2l))],color = 'k',linestyle = 'dashed',label = 'collision location $(x_c)$: %0.2f'%self.coll_loc,linewidth = 2)
         plt.plot([self.COM_x]*2,[0,max(np.max(self.l2r),np.max(self.r2l))],color = 'red',linestyle = 'dashed',label = 'COM $x$-coordinate: %0.2f'%self.COM_x)
         try: 
@@ -435,7 +438,7 @@ class TurbiditySim:
         except IndexError:
             print('Adaptive xlim did not work, setting bounds at [-5,5]')
             plt.xlim([-5,5])
-        plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f \n $\int_{x_c}^\infty d_1(x) dx - \int_{-\infty}^{x_c} d_2(x) dx $= %0.2f'%(self.hR0,self.cR0,self.intrusion_mass))
+        plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f \n $\int_{x_c}^\infty d_1(x) dx - \int_{-\infty}^{x_c} d_2(x) dx $= %0.2f'%(self.hR0,self.cR0,self.encroachment_mass))
         if wantLegend: plt.legend()
         plt.xlabel('$x$')
         if want_y_label: plt.ylabel('deposits \n left: $d_1(x)$, right: $d_2(x)$')
@@ -1160,7 +1163,7 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
         plt.ylabel('deposit')
         plt.subplots_adjust(left = 0.07,right = 0.99, bottom = 0.2, top = 0.85,wspace = 0.18)
         plt.savefig(tt.rootFile + 'solutions/plots/deposit_examples' + tt.fileName + '.png', bbox_inches='tight',dpi=400)
-    def intrusion_only(us):
+    def encroachment_only(us):
         article_params()
         plt.figure(figsize=[8,3])
         subplot_counter = 0
@@ -1169,7 +1172,7 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
             subplot_counter+=1
             plt.subplot(1,2,subplot_counter)
             tt = TurbiditySim(h0,c0,us,testFileName,['d1','d2'])
-            tt.plot_intrusion(wantLegend=False, want_y_label=wyl)
+            tt.plot_encroachment(wantLegend=False, want_y_label=wyl)
             wyl = False # want y legend? 
 
         #plt.subplot(1,2,2)
@@ -1182,11 +1185,11 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
         #    j.set_linestyle(linestyles[i])
 
         plt.subplots_adjust(left = 0.07,right = 0.75, bottom = 0.2, top = 0.85,wspace = 0.18)
-        plt.savefig(tt.rootFile + 'solutions/plots/intrusionOnly_versus_IC_' + tt.fileName + '.png', bbox_inches='tight',dpi=400)
+        plt.savefig(tt.rootFile + 'solutions/plots/encroachmentOnly_versus_IC_' + tt.fileName + '.png', bbox_inches='tight',dpi=400)
     full_deposit()
-    intrusion_only(0.005)
-    intrusion_only(0.01)
-    intrusion_only(0.015)
+    encroachment_only(0.005)
+    encroachment_only(0.01)
+    encroachment_only(0.015)
 
 def encroachment_by_concentration(t=[(1.0,1.0),(1.04,0.9),(1.06,0.8),(1.11,0.7),(0.7,0.7)], times=[i*10 for i in range(1,5)], U_s=0.0, rootFile='Nov24_AsymBoxModel/',sharp=100,N=7000):
     article_params()
@@ -1239,12 +1242,12 @@ class DepositionAnalysis:
         self.fileName = "%iby%i_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%i"%(self.H2.shape[0],self.C2.shape[0],self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.FrSquared,self.U_s,self.h_min,self.sharp)
 
         try: 
-            self.intrusion_mass = np.loadtxt(self.rootFile + self.subFile + 'intrMass_' + self.fileName + '.csv', delimiter = ',')
+            self.encroachment_mass = np.loadtxt(self.rootFile + self.subFile + 'encroachMass_' + self.fileName + '.csv', delimiter = ',')
             self.COM_x = np.loadtxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', delimiter = ',')
         except OSError:
             print('Cannot find processed sedimentation data. Post processing now.') 
             start = time.time()
-            self.intrusion_mass = np.zeros([C2.shape[0],H2.shape[0]])
+            self.encroachment_mass = np.zeros([C2.shape[0],H2.shape[0]])
             self.COM_x = np.zeros([C2.shape[0],H2.shape[0]])
             self.deposited_mass = np.zeros([C2.shape[0],H2.shape[0]])
             self.coll_time = np.zeros([C2.shape[0],H2.shape[0]])
@@ -1255,23 +1258,23 @@ class DepositionAnalysis:
                         temp_sim = TurbiditySim(h2,c2,self.U_s,self.rootFile,['d1','d2'],N=self.N, NuRe=self.NuRe, finalTime=self.finalTime, h_min=self.h_min, CFL=self.CFL, sharp=self.sharp, apart=self.apart, FrSquared=self.FrSquared)
                         if temp_sim.d1.shape[0]>1 and temp_sim.d2.shape[0]>1:
                             temp_sim.deposition_details()
-                            self.intrusion_mass[j,i] = temp_sim.intrusion_mass
+                            self.encroachment_mass[j,i] = temp_sim.encroachment_mass
                             self.COM_x[j,i] = temp_sim.COM_x
                             self.deposited_mass[j,i] = (np.sum(temp_sim.d1)+np.sum(temp_sim.d2))*(temp_sim.x[1]-temp_sim.x[0])/(temp_sim.hL0*temp_sim.cL0 + h2*c2)
                             self.coll_time[j,i] = temp_sim.coll_time
                             self.coll_loc[j,i] = temp_sim.coll_loc
                         else:
                             print('h2 = %0.2f, c2 = %0.2f, U_s = %0.3f simulation did not finish. Final deposit data DNE'%(h2,c2,self.U_s))
-                            self.intrusion_mass[j,i] = np.nan
+                            self.encroachment_mass[j,i] = np.nan
                             self.coll_time[j,i] = np.nan
                             self.coll_loc[j,i] = np.nan
                             self.COM_x[j,i] = np.nan
                     else:
-                        self.intrusion_mass[j,i] = np.nan
+                        self.encroachment_mass[j,i] = np.nan
                         self.COM_x[j,i] = np.nan
                         self.coll_time[j,i] = np.nan
                         self.coll_loc[j,i] = np.nan
-            np.savetxt(self.rootFile + self.subFile + 'intrMass_' + self.fileName + '.csv', self.intrusion_mass, delimiter = ',')
+            np.savetxt(self.rootFile + self.subFile + 'encroachMass_' + self.fileName + '.csv', self.encroachment_mass, delimiter = ',')
             np.savetxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', self.COM_x, delimiter = ',')
             print('%0.2f seconds'%(time.time()-start))
 
@@ -1288,7 +1291,7 @@ class DepositionAnalysis:
         article_params()
         plt.figure(figsize=[7,2.75])
         plt.subplot(121)
-        self.myPcolor('intrusion_mass','Intrusion Mass')
+        self.myPcolor('encroachment_mass','Encroachment Mass')
         plt.subplot(122)
         self.myPcolor('COM_x','COM $x$-coordinate')
         plt.tight_layout()
@@ -1318,16 +1321,16 @@ class DepositionAnalysis:
     def my3Dplot(self):
         H_mesh,C_mesh = np.meshgrid(self.H2,self.C2)
 
-        intrusion_linear = self.linear_appr(H_mesh,C_mesh,self.intrusion_mass)
-        intrusion_quadratic = self.quadratic_appr(H_mesh,C_mesh,self.intrusion_mass)
+        encroachment_linear = self.linear_appr(H_mesh,C_mesh,self.encroachment_mass)
+        encroachment_quadratic = self.quadratic_appr(H_mesh,C_mesh,self.encroachment_mass)
 
         fig = make_subplots(rows=1, cols=2, 
             specs=[[{'type':'surface'}]*2], 
-            subplot_titles=(r'$\text{Intrusion Mass}$', r'$\text{COM }x\text{-coordinate}$'),
+            subplot_titles=(r'$\text{Encroachment Mass}$', r'$\text{COM }x\text{-coordinate}$'),
             horizontal_spacing=0.15)
 
-        fig.add_trace(go.Surface(z=self.intrusion_mass, x=H_mesh, y=C_mesh, colorscale='viridis',colorbar={'x':0.43,'title':'data'}), row=1, col=1)
-        fig.add_trace(go.Surface(z=intrusion_linear, x=H_mesh, y=C_mesh, colorscale='Plotly3', colorbar={'x':0.51, 'title':'Linear approximation'}), row=1, col=1)
+        fig.add_trace(go.Surface(z=self.encroachment_mass, x=H_mesh, y=C_mesh, colorscale='viridis',colorbar={'x':0.43,'title':'data'}), row=1, col=1)
+        fig.add_trace(go.Surface(z=encroachment_linear, x=H_mesh, y=C_mesh, colorscale='Plotly3', colorbar={'x':0.51, 'title':'Linear approximation'}), row=1, col=1)
 
         fig.add_trace(go.Surface(z=self.COM_x, x=H_mesh, y=C_mesh, colorscale='plasma'), row=1, col=2)
 
@@ -1341,15 +1344,15 @@ class DepositionAnalysis:
         del fig
     def get_no_encroachment_data(self):
         '''
-        Find the (h0,c0) values where intrusion_mass = 0. 
-        That is, find the 0 level-set of intrusion_mass.
+        Find the (h0,c0) values where encroachment_mass = 0. 
+        That is, find the 0 level-set of encroachment_mass.
         This is meant to identify an (h0,c0) pair where no encroachment occurs, so I stored this as a dictionary, like a look up table.
         '''
         print('\n!!!  This will return a dictionary with the key being c0 and the value being h0, i.e., no_encroachment[c0]=h0  !!! \n')
         C2_below_1 = np.round(self.C2[:np.argwhere(self.C2<=1)[-1][0]+1],2)
         self.no_encroachment = {}
         for i in range(len(C2_below_1)):
-            p_idx = np.argwhere(self.intrusion_mass[i,:]>0)[-1][0] # p_idx is for positive index, the last positive value. This is dependent on the intrustion mass being a descending function of initial height for a fixed initial c. 
+            p_idx = np.argwhere(self.encroachment_mass[i,:]>0)[-1][0] # p_idx is for positive index, the last positive value. This is dependent on the encroachment mass being a descending function of initial height for a fixed initial c. 
             self.no_encroachment[C2_below_1[i]] = np.round((self.H2[p_idx]+self.H2[p_idx+1])/2,2)
 
 def make_deposition_plots(US=[0.005,0.01,0.015]):
@@ -1366,7 +1369,7 @@ def make_deposition_plots(US=[0.005,0.01,0.015]):
     def layeredSettlingSpeeds():
         fig = make_subplots(rows=1, cols=2, 
             specs=[[{'type':'surface'}]*2], 
-            subplot_titles=(r'$\text{Intrusion Mass}$', r'$\text{COM }x\text{-coordinate}$'))
+            subplot_titles=(r'$\text{Encroachment Mass}$', r'$\text{COM }x\text{-coordinate}$'))
   
         settlingSpeedCM = ['Blugrn','Plotly3','Burg']
          
@@ -1375,7 +1378,7 @@ def make_deposition_plots(US=[0.005,0.01,0.015]):
             H_mesh,C_mesh = np.meshgrid(d.H2,d.C2)
              
 
-            fig.add_trace(go.Surface(z=d.intrusion_mass, x=H_mesh, y=C_mesh, 
+            fig.add_trace(go.Surface(z=d.encroachment_mass, x=H_mesh, y=C_mesh, 
                 colorscale=settlingSpeedCM[i],
                 colorbar={'x':0.29+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}), 
                 row=1, col=1)
@@ -1624,6 +1627,7 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
 
 def article_plots():
     article_params()
+    MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
     # Figure 1,  Example solution for numerics discussion
 
     # Figure 2,  Numerical validation for spatial resolution
@@ -1641,7 +1645,7 @@ def article_plots():
     # Figure 8,  Sediment deposition - Encroachment mass 3D view with planar approximation
 
     # Figure 9,  Box model - schematic
-
+    MainSim.box_model_schematic(6,show=False)
     # Figure 10, Box model - results - asymmetric currents with no shape factor
     Box_SWE_Asym()
     # Figure 11, Box model - results - asymmetric currents with shape factor = 0.9
