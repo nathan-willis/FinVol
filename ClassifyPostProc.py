@@ -6,6 +6,7 @@ if float(str(sys.version_info[1]) + '.' + str(sys.version_info[2])) <= 9.1:
 else:
     from matplotlib import colormaps as cm
 import matplotlib.animation as ani
+import matplotlib.ticker as tkr
 from matplotlib.patches import Rectangle, FancyArrowPatch
 from celluloid import Camera
 from os import getcwd
@@ -1283,17 +1284,20 @@ class DepositionAnalysis:
         if save:
             article_params()
             plt.figure(figsize=[2.6,2.1])
-        pplot = plt.pcolormesh(self.H2,self.C2,getattr(self,attr),shading = 'gouraud')
-        plt.contour(self.H2,self.C2,getattr(self,attr),colors='k',levels=[0])
+        Z = getattr(self,attr)
+        Zm = np.ma.masked_invalid(Z)
+        pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'gouraud')
+        plt.contour(self.H2,self.C2,Z,colors='k',levels=[0])
         plt.gca().set_aspect('equal')
         if plotTitle: plt.title(plotTitle)
-        plt.xlabel('$h_{2,0}$')
-        plt.ylabel('$c_{2,0}$')
+        plt.xlabel('$h_r$')
+        plt.ylabel('$c_r$')
 
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         divider = make_axes_locatable(plt.gca())
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(pplot,cax=cax)
+        cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.1f'))
+        cb.set_ticks(np.arange(np.ceil(Zm.min()*10),np.floor(Zm.max()*10)+1)/10)
         plt.subplots_adjust(left=0.1,right=0.9,top=0.99,bottom=0.16)
         if save:
             plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', bbox_inches='tight',dpi=1000)
