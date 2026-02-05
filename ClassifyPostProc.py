@@ -1278,14 +1278,27 @@ class DepositionAnalysis:
             np.savetxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', self.COM_x, delimiter = ',')
             print('%0.2f seconds'%(time.time()-start))
 
-    def myPcolor(self,attr,plotTitle,streamlines=True):
+    def myPcolor(self,attr,plotTitle,streamlines=True,save=False):
+        if save:
+            article_params()
+            plt.figure(figsize=[2.6,2.1])
         pplot = plt.pcolormesh(self.H2,self.C2,getattr(self,attr),shading = 'gouraud')
         plt.contour(self.H2,self.C2,getattr(self,attr),colors='k',levels=[0])
-        plt.colorbar(pplot)
         plt.gca().set_aspect('equal')
-        plt.title(plotTitle)
+        if plotTitle: plt.title(plotTitle)
         plt.xlabel('$h_{2,0}$')
         plt.ylabel('$c_{2,0}$')
+
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(plt.gca())
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(pplot,cax=cax)
+        plt.subplots_adjust(left=0.1,right=0.9,top=0.99,bottom=0.16)
+        if save:
+            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', bbox_inches='tight',dpi=1000)
+            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', bbox_inches='tight',dpi=800)
+            plt.close()
+            plt.rcParams.update({"text.usetex":False})
 
     def plot_dimensional_analysis(self):
         article_params()
