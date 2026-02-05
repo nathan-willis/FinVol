@@ -20,9 +20,9 @@ double NuRe, NuPe, CFL, h_min, sharp;
 double c2init, h2init;
 
 // Physical parameters
-#define a -15. // lower bound of the interval
-#define b 15.  // upper bound of the interval
-#define T 5. // Final Time
+#define a -70. // lower bound of the interval
+#define b 70.  // upper bound of the interval
+#define T 40. // Final Time
 #define FrSquared 1.0 // Froude number
 //#define U_s 0.00 // Settling speed
 //double U_s = 0.0;
@@ -30,7 +30,7 @@ double c2init, h2init;
 double U_s;
 
 // Initital conditions parameters 
-#define apart 6.0 // How far apart are the centers of the current
+#define apart 5.0 // How far apart are the centers of the current
 #define h1init 1.0
 //#define h2init 1.0
 //double h2init = 0.7;
@@ -38,12 +38,12 @@ double U_s;
 //double c1init = 0.7;
 //#define c2init 1.0
 //double c2init = 0.7;
-#define cur1wid 2.0
-#define cur2wid 2.0
+#define cur1wid 1.0
+#define cur2wid 1.0
 
 // File information
-#define fileprefix "test_Antonia/"
-#define subfile "sims/AB_"
+#define fileprefix "Feb5_Deposition_plots/"
+#define subfile "sims/"
 
 
 // WENO constants
@@ -80,7 +80,7 @@ int save_phi2 = 1; //Decide if you want to save to a file or not.
 int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = .05; // Save timestamp this often
+double print_when = .01; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = 0.5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 

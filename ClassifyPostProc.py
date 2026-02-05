@@ -393,9 +393,9 @@ class TurbiditySim:
         plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f'%(self.hR0,self.cR0))
         plt.xlabel('$x$')
 
-    def plot_deposit_gradient(self,dt_plot=1,xL_tol=1e-5,show=True,save = False, close = True,cb = True):
+    def plot_deposit_gradient(self,dt_plot=1,xb_tol=1e-5,xb=None,show=True,save = False, close = True,cb = True):
         article_params()
-        #plt.figure(figsize=[3.5,2])
+        plt.figure(figsize=[5.125,1.2])
         for desired_time in np.flip(self.T[self.T%dt_plot<0.9*self.dt])[:-1]:
             print(desired_time)
             tI = np.argmin(np.abs(self.T-desired_time)) # tI for time index.
@@ -407,20 +407,19 @@ class TurbiditySim:
         plt.plot(self.x,self.d1[-1,:]+self.d2[-2,:],color='k',linewidth=1)
     
         if cb:
-            cbar=plt.colorbar(gradient)
+            cbar=plt.colorbar(gradient,aspect=5,pad=0.01)
             cbar.set_ticks(ticks=[0,1])
             cbar.ax.set_yticklabels(['$100\%\ d_2$','$100\%\ d_1$'])
     
-        plt.xlabel('$x$')
-        plt.ylabel('deposit')
+        plt.xlabel('$x$',labelpad=0)
+        plt.ylabel('$d_{f,1}+d_{f,2}$')
     
-        xL = max(np.abs(self.x[self.d1[-1,:]>xL_tol][0]),np.abs(self.x[self.d2[-1,:]>xL_tol][-1]))
-        plt.xlim([-xL,xL])
-        plt.subplots_adjust(left = 0.16, right =0.94,bottom=0.18,top =0.97)
+        xb = xb if xb else max(np.abs(self.x[self.d1[-1,:]>xL_tol][0]),np.abs(self.x[self.d2[-1,:]>xL_tol][-1]))
+        plt.xlim([-xb,xb])
+        plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.3,top =0.91)
         if show: plt.show()
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.png',dpi=1000)
         if close: plt.close()
-
 
     def plot_encroachment(self,wantLegend=True, want_y_label=True):
         try:
