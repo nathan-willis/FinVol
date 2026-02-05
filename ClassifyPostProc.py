@@ -1226,6 +1226,7 @@ class DepositionAnalysis:
     def __init__(self, U_s, rootFile, H2=np.linspace(0.7,1.42,73), C2=np.linspace(0.7,1.42,73), N = 5000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 50, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'solutions/postData/'):
         self.H2 = H2
         self.C2 = C2
+        self.H_mesh,self.C_mesh = np.meshgrid(self.H2,self.C2)
         self.U_s = U_s
         self.rootFile = rootFile
         self.subFile = subFile
@@ -1331,21 +1332,127 @@ class DepositionAnalysis:
         print('a = %0.4f, b = %0.4f, c = %0.4f, d = %0.4f, e = %0.4f, f = %0.4f'%(a,b,c,d,e,f))
         return a*X*X + b*X*Y + c*Y*Y + d*X + e*Y + f*np.ones(Z.shape) + 0*Z #The +0*Z at the end is to ``re-introduce'' the nans so that the approximation is not plotted everywhere (bit overwhelming)
 
+    def mpl3Dplot(self,azim=-50,elev=10,save=True):
+        article_params()
+        X = self.H_mesh
+        Y = self.C_mesh
+        Z = self.encroachment_mass
+        Z_masked = np.ma.masked_invalid(Z)
+        P = self.linear_appr(X,Y,Z)
+        P_masked = np.ma.masked_invalid(P)
+        fig,ax = plt.subplots(figsize = (2.6,2.1),subplot_kw = dict(projection = '3d'))
+        ax.plot_surface(X,Y,Z_masked,cmap=cm['viridis'],vmin=Z_masked.min(),vmax=Z_masked.max(),linewidth=0,alpha=0.7)
+        #ax.plot_surface(X,Y,P_masked,cmap=cm['plasma'],vmin=P_masked.min(),vmax=P_masked.max())
+        ax.plot_wireframe(X,Y,P_masked,linewidth=0.5,color='k')
+        ax.set_xlabel('$h_r$',labelpad=-5)
+        ax.set_ylabel('$c_r$',labelpad=-7)
+        ax.set_zlabel('Encroachment Mass',labelpad=-3)
+        ax.xaxis.set_tick_params(pad=-5)
+        ax.yaxis.set_tick_params(pad=-5)
+        ax.zaxis.set_tick_params(pad=0)
+        ax.azim = azim
+        ax.elev = elev
+        plt.subplots_adjust(left = -0.15,right=0.95,bottom=0.0,top=1.1)
+        if save:
+            plt.savefig(self.rootFile + 'solutions/plots/3Dview_' + self.fileName + '.png', bbox_inches='tight', pad_inches=0.25, dpi=1000)
+            plt.savefig(self.rootFile + 'solutions/plots/3Dview_' + self.fileName + '.pdf', bbox_inches='tight', pad_inches=0.2)
+            plt.close()
+        else:
+            plt.show()
+    
+    def plotly3Dplot(self, azim=-80, elev=22):
+        X = self.H_mesh
+        Y = self.C_mesh
+        Z = self.encroachment_mass
+        P = self.linear_appr(X, Y, Z)
+    
+        # Mask NaNs
+        Zm = np.ma.masked_invalid(Z)
+        Pm = np.ma.masked_invalid(P)
+    
+        # Convert azim/elev → Plotly camera
+        r = 1.4
+        az,el = np.deg2rad(azim),np.deg2rad(elev)
+        camera = dict(eye=dict(x=r*np.cos(el)*np.cos(az), y=r*np.cos(el)*np.sin(az), z=r*np.sin(el)))
+    
+        fig = go.Figure()
+    
+        # Surface 1: linear approximation
+        fig.add_trace(go.Surface(x=X,y=Y,z=Pm,colorscale="Plasma",showscale=False,opacity=1.0))
+    
+        # Surface 2: encroachment mass
+        fig.add_trace(
+            go.Surface(
+                x=X,
+                y=Y,
+                z=Zm,
+                colorscale="Viridis",
+                showscale=True,
+                colorbar=dict(
+                    title="Encroachment Mass",
+                    tickfont=dict(size=8)
+                )
+            )
+        )
+    
+        fig.update_layout(
+            width=1040,   # ~2.6 in at 400 dpi
+            height=840,   # ~2.1 in at 400 dpi
+            margin=dict(l=10, r=10, t=10, b=10),
+            font=dict(
+                family="Times New Roman",
+                size=10,
+                color="black"
+            ),
+            scene=dict(
+                camera=camera,
+                xaxis=dict(
+                    title=r"$h_r$",
+                    showbackground=False,
+                    showgrid=True,
+                    gridcolor="lightgray",
+                    zeroline=False,
+                    tickfont=dict(size=8)
+                ),
+                yaxis=dict(
+                    title=r"$c_r$",
+                    showbackground=False,
+                    showgrid=True,
+                    gridcolor="lightgray",
+                    zeroline=False,
+                    tickfont=dict(size=8)
+                ),
+                zaxis=dict(
+                    title="Encroachment Mass",
+                    showbackground=False,
+                    showgrid=True,
+                    gridcolor="lightgray",
+                    zeroline=False,
+                    tickfont=dict(size=8)
+                ),
+                aspectmode="auto"
+            ),
+            paper_bgcolor="white"
+        )
+    
+        #fig.show()
+        #plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', bbox_inches='tight',dpi=800)
+        fig.write_image(self.rootFile + 'solutions/plots/3Dview_' + self.fileName +'.png')
+        
     def my3Dplot(self):
-        H_mesh,C_mesh = np.meshgrid(self.H2,self.C2)
 
-        encroachment_linear = self.linear_appr(H_mesh,C_mesh,self.encroachment_mass)
-        encroachment_quadratic = self.quadratic_appr(H_mesh,C_mesh,self.encroachment_mass)
+        encroachment_linear = self.linear_appr(self.H_mesh,self.C_mesh,self.encroachment_mass)
+        encroachment_quadratic = self.quadratic_appr(self.H_mesh,self.C_mesh,self.encroachment_mass)
 
         fig = make_subplots(rows=1, cols=2, 
             specs=[[{'type':'surface'}]*2], 
             subplot_titles=(r'$\text{Encroachment Mass}$', r'$\text{COM }x\text{-coordinate}$'),
             horizontal_spacing=0.15)
 
-        fig.add_trace(go.Surface(z=self.encroachment_mass, x=H_mesh, y=C_mesh, colorscale='viridis',colorbar={'x':0.43,'title':'data'}), row=1, col=1)
-        fig.add_trace(go.Surface(z=encroachment_linear, x=H_mesh, y=C_mesh, colorscale='Plotly3', colorbar={'x':0.51, 'title':'Linear approximation'}), row=1, col=1)
+        fig.add_trace(go.Surface(z=self.encroachment_mass, x=self.H_mesh, y=self.C_mesh, colorscale='viridis',colorbar={'x':0.43,'title':'data'}), row=1, col=1)
+        fig.add_trace(go.Surface(z=encroachment_linear, x=self.H_mesh, y=self.C_mesh, colorscale='Plotly3', colorbar={'x':0.51, 'title':'Linear approximation'}), row=1, col=1)
 
-        fig.add_trace(go.Surface(z=self.COM_x, x=H_mesh, y=C_mesh, colorscale='plasma'), row=1, col=2)
+        fig.add_trace(go.Surface(z=self.COM_x, x=self.H_mesh, y=self.C_mesh, colorscale='plasma'), row=1, col=2)
 
         fig.update_layout(title_text=r'$\text{Settling speed}: U_s=%0.3f$'%self.U_s,
             height = 600, width = 1200,
@@ -1355,6 +1462,7 @@ class DepositionAnalysis:
                 'aspectmode':'manual','aspectratio':dict(x=1, y=1, z=1.),'camera':dict(eye=dict(x=1.1, y=1.98, z=0.66))})
         fig.write_html(self.rootFile + 'solutions/plots/3Dview_' + self.fileName +'.html', include_mathjax="cdn")
         del fig
+
     def get_no_encroachment_data(self):
         '''
         Find the (h0,c0) values where encroachment_mass = 0. 
@@ -1388,14 +1496,13 @@ def make_deposition_plots(US=[0.005,0.01,0.015]):
          
         for i,u in enumerate(US):
             d = DepositionAnalysis(u,'SedimentationInitialConditionTest_2025Jun7/')
-            H_mesh,C_mesh = np.meshgrid(d.H2,d.C2)
              
 
-            fig.add_trace(go.Surface(z=d.encroachment_mass, x=H_mesh, y=C_mesh, 
+            fig.add_trace(go.Surface(z=d.encroachment_mass, x=d.H_mesh, y=d.C_mesh, 
                 colorscale=settlingSpeedCM[i],
                 colorbar={'x':0.29+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}), 
                 row=1, col=1)
-            fig.add_trace(go.Surface(z=d.COM_x, x=H_mesh, y=C_mesh, 
+            fig.add_trace(go.Surface(z=d.COM_x, x=d.H_mesh, y=d.C_mesh, 
                 colorscale=settlingSpeedCM[i],
                 colorbar={'x':0.79+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}), 
                 row=1, col=2)
@@ -1641,27 +1748,54 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
 def article_plots():
     article_params()
     MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
+    MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
     # Figure 1,  Example solution for numerics discussion
+    # Remove shading
+    # Add x_i to left panel
+    # Make arrows thinner
+    # leave h_r/c_r 
+    # Keep all axes equal
+    # vertically stacked, with no space between figures (since they have a shared axis), with tick marks on each axis (but no labels) 
 
     # Figure 2,  Numerical validation for spatial resolution
 
     # Figure 3,  Numerical validation for Reynolds number
 
     # Figure 4,  Results - solution profile
+    # Make it look not dumb
+    # needs to go somewhere else, but not sure where
+    # Make a matching MP4 to go with supplemental materials 
 
     # Figure 5,  Results - Space time plot
+    # Add test case matching figure 4
 
     # Figure 6,  Sediment deposition - example solutions
+    # Matching vertical axes
+    # vertically stacked
+    # Separate figures, since each one is a different run
 
     # Figure 7,  Sediment deposition - Encroachment mass colormap
+    MainDep.myPcolor('encroachment_mass','',save=True)
+    # add a,b,c,d at correct locations aligning with figure 6
+    # change labels to c_r and h_r
+    # only 1 significant digit on the colorbar
 
     # Figure 8,  Sediment deposition - Encroachment mass 3D view with planar approximation
+    # This figure goes away, find a "best fit" parameter to report for planes. 
 
     # Figure 9,  Box model - schematic
     MainSim.box_model_schematic(6,show=False)
+    # Remove top two panels, they are redundant with figure 1
+    # Switch to be avg h-/+ for third panel
+
     # Figure 10, Box model - results - asymmetric currents with no shape factor
+    # Change velocity ymin to be 0
+    # make 0 lower bound be tight on all plots. 
+    # kill the horizontal label on top subplot. 
     Box_SWE_Asym()
     # Figure 11, Box model - results - asymmetric currents with shape factor = 0.9
+    # Change velocity ymin to be 0
     Box_SWE_Asym(shape_factor=0.9)
     # Figure 12
+    # Change velocity ymin to be 0
     Box_SWE_Settling()
