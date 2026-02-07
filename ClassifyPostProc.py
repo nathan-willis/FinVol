@@ -132,7 +132,7 @@ class TurbiditySim:
                 for line in fh: print(line)
 
     def makeMP4(self, varList = ['h','u','c1','c2'],tMax=1000.,show_legend = False, xlim = None, ylim = None,framerate = 30.):#xmax = None, xmin = None,ymax = None, ymin = ):
-
+        plt.rcParams.update({"text.usetex":False})
         fig = plt.figure(figsize=(12,8))
         camera = Camera(fig)
     

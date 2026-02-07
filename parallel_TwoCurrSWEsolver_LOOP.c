@@ -339,10 +339,10 @@ void initialize(){
     for(i=0;i<N+1;i++){
         q_[i]    = 0.;
         h_[i]    = squarewave(x_[i],-apart/2.0,cur1wid,fmax(0.,h1init-h_min),0.) + squarewave(x_[i],apart/2.0,cur2wid,fmax(0.,h2init-h_min),0.) + h_min;
-        //phi1_[i] = squarewave(x_[i],-apart/2.0,cur1wid,c1init,0.)*h_[i];
-        //phi2_[i] = squarewave(x_[i],apart/2.0,cur2wid,c2init,0.)*h_[i];
-        phi1_[i] = c1init*h_[i];
-        phi2_[i] = c2init*h_[i];
+        phi1_[i] = squarewave(x_[i],-apart/2.0,cur1wid,c1init,0.)*h_[i];
+        phi2_[i] = squarewave(x_[i],apart/2.0,cur2wid,c2init,0.)*h_[i];
+        //phi1_[i] = c1init*h_[i];
+        //phi2_[i] = c2init*h_[i];
          
     }
     avg_cell(h_,h); // Get cell averages
