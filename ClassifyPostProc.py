@@ -82,7 +82,8 @@ class TurbiditySim:
         try:
             with open(self.rootFile + self.subFile + self.fileName + '/info.log'):
                 pass
-        except FileNotFoundError:
+        except FileNotFoundError as err:
+            print('FileNotFoundError:',err)
             self.fileName = "hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_NuPe%i_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%i"%(self.hL0,self.hR0,self.cL0,self.cR0,self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.NuPe,self.FrSquared,self.U_s,self.h_min,self.sharp)
         
         self.unpack(VARS)

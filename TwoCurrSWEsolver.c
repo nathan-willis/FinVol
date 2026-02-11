@@ -46,35 +46,6 @@ double U_s;
 #define fileprefix "Feb5_deposition_plots/"
 #define subfile "sims/"
 
-
-// WENO constants
-double beta[2][3] = {{3./10.,3./5.,1./10.},{1./10.,3./5.,3./10.}};
-double C[4][3] = {{11./6.,-7./6.,1./3.},{1./3.,5./6.,-1./6.},{-1./6.,5./6.,1./3.},{1./3.,-7./6.,11./6.}};
-double ep = 1e-6; 
-
-double poly_spline(double x, double M, double h, double c, double elseval);
-double squarewave(double x, double center, double width, double max, double min);
-void initialize();
-void avg_cell(double *u, double *u_avg);
-void WENO(double *u_, double *u_left,double *u_right);
-void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2);
-int BC(int aa);
-double flux(double h, double q, double phi1, double phi2, int which);
-double diff(double *u,int i,int which);
-double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which);
-double DiscreteSpatial(int i, int which);
-int max_fct(int aa, int bb);
-int min_fct(int aa, int bb);
-void print_to_file(double t, double *x,FILE *hist2);
-void print_conserved_variables_to_file(double t);
-void print_params_to_log();
-void print_date_time();
-void pointers ();
-void unpointers ();
-void print_usage(const char *prog);
-
-void collision_check();
-
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
 int save_phi1 = 1; //Decide if you want to save to a file or not.
@@ -114,6 +85,159 @@ double *phi2_,*phi2,*phi2_temp1,*phi2_temp2,*phi2L,*phi2R;
 double *deposit1,*deposit2;
 
 FILE *h_file,*q_file,*phi1_file,*phi2_file,*deposit1_file,*deposit2_file,*log_file; // Variable identifying a file
+
+
+double poly_spline(double x, double M, double h, double c, double elseval);
+double squarewave(double x, double center, double width, double max, double min);
+void initialize();
+void avg_cell(double *u, double *u_avg);
+void print_to_file(double t, double *x,FILE *hist2);
+void print_conserved_variables_to_file(double t);
+void print_params_to_log();
+void print_date_time();
+void pointers ();
+void unpointers ();
+void print_usage(const char *prog);
+
+// These are functions called in the while loop. 
+//int BC(int aa);
+static inline int BC(int aa){
+    if(aa<0){return BC(aa+N);}
+    else{return aa%N;}
+}
+//double diff(double *u,int i,int which);
+static inline double diff(double *u,int i,int which){
+    double diff_const;
+    double d_co[4] = {-49./18.,3./2.,-3./20.,1./90.}; // coefficients for 6th-order central finite difference stencil for second-derivatve
+
+    if(which == 0){diff_const = 1./NuRe;}
+    if(which == 1){diff_const = 1./NuPe;}
+    return diff_const*(1./(*dx*(*dx)))*(u[BC(i-3)]*d_co[3] + u[BC(i-2)]*d_co[2] + u[BC(i-1)]*d_co[1] + u[i]*d_co[0] + u[BC(i+1)]*d_co[1] + u[BC(i+2)]*d_co[2] + u[BC(i+3)]*d_co[3]);
+}
+//double flux(double h, double q, double phi1, double phi2, int which);
+static inline double flux(double h, double q, double phi1, double phi2, int which){
+    if(which == 0){return q ;}
+    if(which == 1){return q*q/h + h*phi1/(2*FrSquared) + h*phi2/(2*FrSquared) ;}
+    if(which == 2){return phi1*q/h ;}
+    if(which == 3){return phi2*q/h ;}
+    printf("Did something weird in flux");
+    return 10000000.;
+    }
+//double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which);
+static inline double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which){
+    double sp;
+    double sm;
+    double whichVar[4] = {h_r-h_l,q_r-q_l,phi1_r-phi1_l,phi2_r-phi2_l};
+    sp =         q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.);
+    sp = fmax(sp,q_r/h_r);
+    sp = fmax(sp,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
+    sp = fmax(sp,q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.));
+    sp = fmax(sp,q_l/h_l);
+    sp = fmax(sp,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
+    sm =         q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.);
+    sm = fmin(sm,q_l/h_l);
+    sm = fmin(sm,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
+    sm = fmin(sm,q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.));
+    sm = fmin(sm,q_r/h_r);
+    sm = fmin(sm,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
+
+    if(sm >=0.){return flux(h_l,q_l,phi1_l,phi2_l,which);}
+    if(sp <=0.){return flux(h_r,q_r,phi1_r,phi2_r,which);}
+    return (sp*flux(h_l,q_l,phi1_l,phi2_l,which) - sm*flux(h_r,q_r,phi1_r,phi2_r,which) + sp*sm*whichVar[which])/(sp-sm);
+    printf("Did something weird in F_HLL");
+    return 10000000.;
+}
+//double DiscreteSpatial(int i, int which);
+static inline double DiscreteSpatial(int i, int which){
+    return F_HLL(hL[i],hR[BC(i+1)],qL[i],qR[BC(i+1)],phi1L[i],phi1R[BC(i+1)],phi2L[i],phi2R[BC(i+1)],which) - 
+           F_HLL(hL[BC(i-1)],hR[i],qL[BC(i-1)],qR[i],phi1L[BC(i-1)],phi1R[i],phi2L[BC(i-1)],phi2R[i],which);
+}
+//void WENO(double *u_, double *u_left,double *u_right);
+static inline void WENO(double *u_, double *u_left,double *u_right){
+    // WENO constants
+    double beta[2][3] = {{3./10.,3./5.,1./10.},{1./10.,3./5.,3./10.}};
+    double C[4][3] = {{11./6.,-7./6.,1./3.},{1./3.,5./6.,-1./6.},{-1./6.,5./6.,1./3.},{1./3.,-7./6.,11./6.}};
+    double ep = 1e-6; 
+    //Need to create u_left and u_right outside of this function
+    double gamma[N][m], u_l[N][m], u_r[N][m];
+    double alpha_l[N][m], alpha_r[N][m];
+    double W_l[N][m], W_r[N][m];
+    int i,r;
+    for(i=0;i<N;i++){
+        gamma[i][0] = 13./12.*pow(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)],2) + 1./4.*pow(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)],2);
+        gamma[i][1] = 13./12.*pow(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)],2) + 1./4.*pow(u_[BC(i-1)] - u_[BC(i+1)],2);
+        gamma[i][2] = 13./12.*pow(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i],2) + 1./4.*pow(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i],2);
+
+        for(r=0;r<m;r++){
+            u_l[i][r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
+            u_r[i][r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
+
+            alpha_l[i][r] = beta[0][r]/pow(ep + gamma[i][r],2);
+            alpha_r[i][r] = beta[1][r]/pow(ep + gamma[i][r],2);
+        }
+    }
+
+    double alpha_l_row_sum, alpha_r_row_sum;
+    for(i=0;i<N;i++){
+        alpha_l_row_sum = 0;
+        alpha_r_row_sum = 0;
+        for(r=0;r<m;r++){
+            alpha_l_row_sum += alpha_l[i][r];
+            alpha_r_row_sum += alpha_r[i][r];
+        }
+        for(r=0;r<m;r++){
+            W_l[i][r] = alpha_l[i][r]/alpha_l_row_sum;
+            W_r[i][r] = alpha_r[i][r]/alpha_r_row_sum;
+        }
+    }
+   
+    for(i=0;i<N;i++){
+        u_left[i] = 0;
+        u_right[i] = 0;
+        for(r=0;r<m;r++){
+            u_left[i] += W_l[i][r]*u_l[i][r];
+            u_right[i] += W_r[i][r]*u_r[i][r];
+        }
+    }
+}
+//void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2);
+static inline void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2){
+    WENO(hh,hL,hR); // Perform WENO to get uL and uR from the last solution vector of cell averages
+    WENO(qq,qL,qR); // Perform WENO to get uL and uR from the last solution vector of cell averages
+    WENO(pphi1,phi1L,phi1R); // Perform WENO to get uL and uR from the last solution vector of cell averages
+    WENO(pphi2,phi2L,phi2R); // Perform WENO to get uL and uR from the last solution vector of cell averages
+}
+//int max_fct(int aa, int bb);
+static inline int max_fct(int aa, int bb){
+    if(aa>bb){return aa;}
+    else{return bb;}
+}
+//int min_fct(int aa, int bb);
+static inline int min_fct(int aa, int bb){
+    if(aa>bb){return bb;}
+    else{return aa;}
+}
+//void collision_check();
+static inline void collision_check(){
+    int i;
+    int phi1_right = 0;
+    int phi2_left = N;
+    double phi_tol = 0.05;
+    for(i=0;i<N;i++){
+        if(phi1[i]>phi_tol){
+            phi1_right = max_fct(i,phi1_right);
+        }
+        if(phi2[i]>phi_tol){
+            phi2_left = min_fct(i,phi2_left);
+        }
+    }
+    if(phi1_right > phi2_left){
+        collision = 1;
+        CI = ((double)phi1_right + (double)phi2_left)/2.;
+        CX = (x[phi1_right] + x[phi2_left])/2.;
+    }
+}
+
 int main(int argc, char* argv[]){
     if (argc == 1 ||
         (argc > 1 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")))) {
@@ -281,51 +405,6 @@ int main(int argc, char* argv[]){
     if(save_deposit){fclose(deposit1_file);}
     if(save_deposit){fclose(deposit2_file);}
 }
-double diff(double *u,int i,int which){
-    double diff_const;
-    double d_co[4] = {-49./18.,3./2.,-3./20.,1./90.}; // coefficients for 6th-order central finite difference stencil for second-derivatve
-
-    if(which == 0){diff_const = 1./NuRe;}
-    if(which == 1){diff_const = 1./NuPe;}
-    return diff_const*(1./(*dx*(*dx)))*(u[BC(i-3)]*d_co[3] + u[BC(i-2)]*d_co[2] + u[BC(i-1)]*d_co[1] + u[i]*d_co[0] + u[BC(i+1)]*d_co[1] + u[BC(i+2)]*d_co[2] + u[BC(i+3)]*d_co[3]);
-}
-
-double flux(double h, double q, double phi1, double phi2, int which){
-    if(which == 0){return q ;}
-    if(which == 1){return q*q/h + h*phi1/(2*FrSquared) + h*phi2/(2*FrSquared) ;}
-    if(which == 2){return phi1*q/h ;}
-    if(which == 3){return phi2*q/h ;}
-    printf("Did something weird in flux");
-    return 10000000.;
-    }
-
-double DiscreteSpatial(int i, int which){
-    return F_HLL(hL[i],hR[BC(i+1)],qL[i],qR[BC(i+1)],phi1L[i],phi1R[BC(i+1)],phi2L[i],phi2R[BC(i+1)],which) - 
-           F_HLL(hL[BC(i-1)],hR[i],qL[BC(i-1)],qR[i],phi1L[BC(i-1)],phi1R[i],phi2L[BC(i-1)],phi2R[i],which);
-}
-double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which){
-    double sp;
-    double sm;
-    double whichVar[4] = {h_r-h_l,q_r-q_l,phi1_r-phi1_l,phi2_r-phi2_l};
-    sp =         q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.);
-    sp = fmax(sp,q_r/h_r);
-    sp = fmax(sp,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
-    sp = fmax(sp,q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.));
-    sp = fmax(sp,q_l/h_l);
-    sp = fmax(sp,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
-    sm =         q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.);
-    sm = fmin(sm,q_l/h_l);
-    sm = fmin(sm,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
-    sm = fmin(sm,q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.));
-    sm = fmin(sm,q_r/h_r);
-    sm = fmin(sm,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
-
-    if(sm >=0.){return flux(h_l,q_l,phi1_l,phi2_l,which);}
-    if(sp <=0.){return flux(h_r,q_r,phi1_r,phi2_r,which);}
-    return (sp*flux(h_l,q_l,phi1_l,phi2_l,which) - sm*flux(h_r,q_r,phi1_r,phi2_r,which) + sp*sm*whichVar[which])/(sp-sm);
-    printf("Did something weird in F_HLL");
-    return 10000000.;
-}
 
 double squarewave(double x, double center, double width, double max, double min){
     //double s = 50.0;
@@ -367,60 +446,6 @@ void avg_cell(double *u, double *u_avg){
     }
 }
 
-int BC(int aa){
-    if(aa<0){return BC(aa+N);}
-    else{return aa%N;}
-}
-
-void WENO(double *u_, double *u_left,double *u_right){
-    //Need to create u_left and u_right outside of this function
-    double gamma[N][m], u_l[N][m], u_r[N][m];
-    double alpha_l[N][m], alpha_r[N][m];
-    double W_l[N][m], W_r[N][m];
-    int i,r;
-    for(i=0;i<N;i++){
-        gamma[i][0] = 13./12.*pow(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)],2) + 1./4.*pow(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)],2);
-        gamma[i][1] = 13./12.*pow(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)],2) + 1./4.*pow(u_[BC(i-1)] - u_[BC(i+1)],2);
-        gamma[i][2] = 13./12.*pow(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i],2) + 1./4.*pow(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i],2);
-
-        for(r=0;r<m;r++){
-            u_l[i][r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
-            u_r[i][r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
-
-            alpha_l[i][r] = beta[0][r]/pow(ep + gamma[i][r],2);
-            alpha_r[i][r] = beta[1][r]/pow(ep + gamma[i][r],2);
-        }
-    }
-
-    double alpha_l_row_sum, alpha_r_row_sum;
-    for(i=0;i<N;i++){
-        alpha_l_row_sum = 0;
-        alpha_r_row_sum = 0;
-        for(r=0;r<m;r++){
-            alpha_l_row_sum += alpha_l[i][r];
-            alpha_r_row_sum += alpha_r[i][r];
-        }
-        for(r=0;r<m;r++){
-            W_l[i][r] = alpha_l[i][r]/alpha_l_row_sum;
-            W_r[i][r] = alpha_r[i][r]/alpha_r_row_sum;
-        }
-    }
-   
-    for(i=0;i<N;i++){
-        u_left[i] = 0;
-        u_right[i] = 0;
-        for(r=0;r<m;r++){
-            u_left[i] += W_l[i][r]*u_l[i][r];
-            u_right[i] += W_r[i][r]*u_r[i][r];
-        }
-    }
-}
-void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2){
-    WENO(hh,hL,hR); // Perform WENO to get uL and uR from the last solution vector of cell averages
-    WENO(qq,qL,qR); // Perform WENO to get uL and uR from the last solution vector of cell averages
-    WENO(pphi1,phi1L,phi1R); // Perform WENO to get uL and uR from the last solution vector of cell averages
-    WENO(pphi2,phi2L,phi2R); // Perform WENO to get uL and uR from the last solution vector of cell averages
-}
 
 void print_to_file(double t, double *x,FILE *hist2){
     fprintf(hist2,"%3.10f ",t);
@@ -536,35 +561,6 @@ void pointers (){
     deposit2 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit2
 }
 
-int max_fct(int aa, int bb){
-    if(aa>bb){return aa;}
-    else{return bb;}
-}
-
-int min_fct(int aa, int bb){
-    if(aa>bb){return bb;}
-    else{return aa;}
-}
-
-void collision_check(){
-    int i;
-    int phi1_right = 0;
-    int phi2_left = N;
-    double phi_tol = 0.05;
-    for(i=0;i<N;i++){
-        if(phi1[i]>phi_tol){
-            phi1_right = max_fct(i,phi1_right);
-        }
-        if(phi2[i]>phi_tol){
-            phi2_left = min_fct(i,phi2_left);
-        }
-    }
-    if(phi1_right > phi2_left){
-        collision = 1;
-        CI = ((double)phi1_right + (double)phi2_left)/2.;
-        CX = (x[phi1_right] + x[phi2_left])/2.;
-    }
-}
 
 void unpointers (){
     //deallocate memory
