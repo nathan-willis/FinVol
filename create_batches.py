@@ -10,7 +10,6 @@ def create_batches(minx,dx,maxx,miny,dy,maxy):
 
     R = list(range(0,len(L),int(len(L)/(int(len(L)/256)+1))+1)) + [len(L)]
     for i in range(len(R)-1):
-        print(i,R[i],R[i+1])
         l = L[R[i]:R[i+1]]
         with open('./batch_%i.txt'%i,'w') as f:
             for params in l:
