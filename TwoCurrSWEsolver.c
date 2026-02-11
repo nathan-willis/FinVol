@@ -86,7 +86,7 @@ double print_when = .05; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
-int print_info = 0;
+int print_info = 1;
 double print_first_line;
 
 int collision = 0; // Flag to know if a collision was detected or not. 
@@ -147,7 +147,7 @@ int main(int argc, char* argv[]){
     char file_details[256];
     char dir[512], str_log[1024]; // String of characters containing directory name and log name
     char str_h[1024],str_q[1024],str_phi1[1024],str_phi2[1024],str_deposit1[1024],str_deposit2[1024]; // String of characters containing file name
-    sprintf(file_details, "hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%1.0fapart_N%i_CFL%0.3f_T%0.1f_NuRe%0.0f_NuPe%0.0f_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%0.0f", h1init,h2init,c1init,c2init,apart,N,CFL,T,NuRe,NuPe,FrSquared,U_s,h_min,sharp); // Building a string that contains all the parameter details for the file names
+    sprintf(file_details, "hTwo%0.2f_cTwo%0.2f_%1.0fapart_N%i_CFL%0.3f_T%0.1f_NuRe%0.0f_Us%0.3f_hmin%0.5f_sharp%0.0f", h2init,c2init,apart,N,CFL,T,NuRe,U_s,h_min,sharp); // Building a string that contains all the parameter details for the file names
     sprintf(dir, "%s%s%s",fileprefix,subfile,file_details); // Building the directory name
     sprintf(str_h, "%s/h", dir); // Building a complete file name
     sprintf(str_q, "%s/q", dir); // Building a complete file name
