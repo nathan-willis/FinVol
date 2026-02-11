@@ -19,7 +19,7 @@ batch_file="batch_${batch_index}.txt"
 max_jobs=256 # max parallel jobs allowed
 while read param1 param2; do
     ./IC_Sedimentation2026Feb11.out 7000 1000 0.1 0.0001 50. 0.01 $param1 $param2 &
-    echo "$param1 $param2" >> SedimentationInitialConditionTest_2026Feb11/progress.log
+    echo "$param1 $param2" >> Feb11_2026_SedimentationInitialConditionTest/progress.log
     while (( $(jobs -r | wc -l) >= max_jobs )); do
       sleep 5
     done

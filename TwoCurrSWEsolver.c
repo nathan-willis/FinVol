@@ -43,7 +43,7 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "Feb5_deposition_plots/"
+#define fileprefix "Feb11_2026_SedimentationInitialConditionTest/"
 #define subfile "sims/"
 
 int save_q = 1; //Decide if you want to save to a file or not.
