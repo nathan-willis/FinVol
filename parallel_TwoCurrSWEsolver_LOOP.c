@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<sys/stat.h>
 #include<time.h>
+#include<string.h>
 //#include "TwoCurrTestValues.h"
 //#include "utility_fns.h"
 
@@ -42,7 +43,7 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "Feb5_Deposition_plots/"
+#define fileprefix "Feb5_deposition_plots/"
 #define subfile "sims/"
 
 
@@ -70,6 +71,7 @@ void print_params_to_log();
 void print_date_time();
 void pointers ();
 void unpointers ();
+void print_usage(const char *prog);
 
 void collision_check();
 
@@ -80,10 +82,11 @@ int save_phi2 = 1; //Decide if you want to save to a file or not.
 int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = .01; // Save timestamp this often
+double print_when = .05; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
-double print_to_screen = 0.5; // Print to screen this often
+double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
+int print_info = 0;
 double print_first_line;
 
 int collision = 0; // Flag to know if a collision was detected or not. 
@@ -112,6 +115,11 @@ double *deposit1,*deposit2;
 
 FILE *h_file,*q_file,*phi1_file,*phi2_file,*deposit1_file,*deposit2_file,*log_file; // Variable identifying a file
 int main(int argc, char* argv[]){
+    if (argc == 1 ||
+        (argc > 1 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")))) {
+        print_usage(argv[0]);
+        return 0;
+    }
     if (argc < 9) {
         fprintf(stderr, "Error: missing arguments.\n");
         fprintf(stderr, "Usage: %s <input_file> [other options]\n", argv[0]);
@@ -223,11 +231,12 @@ int main(int argc, char* argv[]){
         print_screen_check += k;
         if(print_check>=print_when || is_last){
             if(save_deposit || save_q || save_h || save_phi1 || save_phi2){print_conserved_variables_to_file(t);
-            printf("SAVING TO FILE: ");}
-            printf("t=%0.4f \n",t);
+                if(print_info){printf("SAVING TO FILE: ");}
+            }
+            if(print_info){printf("t=%0.4f \n",t);}
             print_check = print_check - print_when;
         }
-        if(print_screen_check>=print_to_screen){
+        if(print_screen_check>=print_to_screen && print_info){
             printf("\n##########################################\n");
             printf("# c1=%0.2f,  c2=%0.2f,  h1=%.2f,  h2=%0.2f \n# N=%i,  dx=%0.8f\n# CFL=%0.4f,  k=%0.16f\n# t=%0.16f\n",c1init,c2init,h1init,h2init,N,*dx,CFL,k,t);
             printf("##########################################\n\n");
@@ -565,4 +574,28 @@ void unpointers (){
     free(phi1); free(phi1_); free(phi1_temp1); free(phi1_temp2); free(phi1L); free(phi1R);
     free(phi2); free(phi2_); free(phi2_temp1); free(phi2_temp2); free(phi2L); free(phi2R);
     free(deposit1); free(deposit2);
+}
+
+void print_usage(const char *prog) {
+    //N = ((int)atoi(argv[1]));
+    //NuRe = ((double)atoi(argv[2]));
+    //CFL = ((double)atof(argv[3]));
+    //h_min = ((double)atof(argv[4]));
+    //sharp = ((double)atof(argv[5]));
+    //U_s = ((double)atof(argv[6]));
+    //c2init = ((double)atof(argv[7]));
+    //h2init = ((double)atof(argv[8]));
+    printf("\nUsage:\n");
+    printf("  %s arg1 arg2 arg3 arg4 arg5 arg6 arg7 arg8\n\n", prog);
+    printf("Arguments:\n");
+    printf("  arg1 N, number of cells \n");
+    printf("  arg2 NuRe, numerical Reynolds number \n");
+    printf("  arg3 CFL \n");
+    printf("  arg4 h_min \n");
+    printf("  arg5 sharp \n");
+    printf("  arg6 U_s \n");
+    printf("  arg7 c2init \n");
+    printf("  arg8 h2init \n\n");
+    printf("Options:\n");
+    printf("  -h, --help   Show this help message\n\n");
 }
