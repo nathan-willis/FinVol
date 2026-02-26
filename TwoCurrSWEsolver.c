@@ -43,7 +43,7 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "Feb11_2026_SedimentationInitialConditionTest/"
+#define fileprefix "Feb26_2026_SedimentationInitialConditionTest/"
 #define subfile "sims/"
 
 int save_q = 0; //Decide if you want to save to a file or not.
@@ -55,7 +55,7 @@ int J_save = 1; // jump between spatial cells that are saved.
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
 double print_when = 40.05; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
-double print_to_screen = .5; // Print to screen this often
+double print_to_screen = 80.; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
 int print_info = 1;
 double print_first_line;

@@ -1,4 +1,4 @@
-def create_batches(minx,dx,maxx,miny,dy,maxy):
+def create_batches(minx,dx,maxx,miny,dy,maxy,num_nodes=256):
     x = minx
     L = []
     while x<=maxx+1e-10:
@@ -8,7 +8,7 @@ def create_batches(minx,dx,maxx,miny,dy,maxy):
             y+=dy
         x+=dx
 
-    R = list(range(0,len(L),int(len(L)/(int(len(L)/256)+1))+1)) + [len(L)]
+    R = list(range(0,len(L),int(len(L)/(int(len(L)/num_nodes)+1))+1)) + [len(L)]
     for i in range(len(R)-1):
         l = L[R[i]:R[i+1]]
         with open('./batch_%i.txt'%i,'w') as f:
