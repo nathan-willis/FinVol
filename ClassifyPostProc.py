@@ -420,11 +420,12 @@ class TurbiditySim:
         plt.xlabel('$x$',labelpad=0)
         plt.ylabel('$d_{f,1}+d_{f,2}$')
     
-        xb = xb if xb else max(np.abs(self.x[self.d1[-1,:]>xL_tol][0]),np.abs(self.x[self.d2[-1,:]>xL_tol][-1]))
+        xb = xb if xb else max(np.abs(self.x[self.d1[-1,:]>xb_tol][0]),np.abs(self.x[self.d2[-1,:]>xb_tol][-1]))
         plt.xlim([-xb,xb])
         plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.3,top =0.91)
         if show: plt.show()
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.png',dpi=1000)
+        if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.pdf',dpi=1000)
         if close: plt.close()
 
     def plot_encroachment(self,wantLegend=True, want_y_label=True):
@@ -982,6 +983,24 @@ class TurbiditySim:
         plt.xlabel('time')
         plt.ylabel('concentration')
 
+def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],Sims=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=50,finalTime=40.):
+    if Sims == None:
+        Sims = []
+        for sim in SimVars:
+            Sims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d1','d2'], sharp=sharp, N=N, finalTime=finalTime))
+
+    yMax = 0
+    for sim in Sims:
+        D = sim.d1+sim.d2
+        yMax = max(yMax,np.max(D))
+    print(yMax)
+
+    for sim in Sims:
+        sim.plot_deposit_gradient(dt_plot=0.1,show=False,save=True,xb=20)
+  
+    return Sims
+
+    
 def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
     '''
     This function plots the position and the velocity of the bore
