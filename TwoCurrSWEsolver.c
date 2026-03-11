@@ -46,10 +46,10 @@ double U_s;
 #define fileprefix "Mar3_DepositionExamplePlots/"
 #define subfile "sims/"
 
-int save_q = 1; //Decide if you want to save to a file or not.
-int save_h = 1; //Decide if you want to save to a file or not.
-int save_phi1 = 1; //Decide if you want to save to a file or not.
-int save_phi2 = 1; //Decide if you want to save to a file or not.
+int save_q = 0; //Decide if you want to save to a file or not.
+int save_h = 0; //Decide if you want to save to a file or not.
+int save_phi1 = 0; //Decide if you want to save to a file or not.
+int save_phi2 = 0; //Decide if you want to save to a file or not.
 int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
