@@ -45,6 +45,7 @@ def load_settling_sims(US=[0,0.005,0.01,0.015,0.02]):
     for us in US:
         S[us] = TurbiditySim(1.,1.,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=14000)
     return S
+
 def intersection(x,f,g):
     '''
     Find the intersection points between two functions (as vectors) f and g
@@ -399,9 +400,9 @@ class TurbiditySim:
         plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f'%(self.hR0,self.cR0))
         plt.xlabel('$x$')
 
-    def plot_deposit_gradient(self,dt_plot=1,xb_tol=1e-5,xb=None,show=True,save = False, close = True,cb = True):
+    def plot_deposit_gradient(self,dt_plot=1,xb_tol=1e-5,xb=None,yb=None,show=True,save = False, close = True,cb = True,title=True):
         article_params()
-        plt.figure(figsize=[5.125,1.2])
+        plt.figure(figsize=[5.125,1.2 + 0.2*int(title)])
         for desired_time in np.flip(self.T[self.T%dt_plot<0.9*self.dt])[:-1]:
             print(desired_time)
             tI = np.argmin(np.abs(self.T-desired_time)) # tI for time index.
@@ -418,11 +419,17 @@ class TurbiditySim:
             cbar.ax.set_yticklabels(['$100\%\ d_2$','$100\%\ d_1$'])
     
         plt.xlabel('$x$',labelpad=0)
-        plt.ylabel('$d_{f,1}+d_{f,2}$')
+        #plt.ylabel('$d_{f,1}+d_{f,2}$')
+        plt.ylabel('deposit height')
     
         xb = xb if xb else max(np.abs(self.x[self.d1[-1,:]>xb_tol][0]),np.abs(self.x[self.d2[-1,:]>xb_tol][-1]))
         plt.xlim([-xb,xb])
-        plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.3,top =0.91)
+        plt.ylim([0,yb])
+        if title: 
+            plt.title('$h_r=%0.2f$, $c_r=%0.2f$'%(self.hR0,self.cR0))
+            plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
+        else:
+            plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.3,top =0.91)
         if show: plt.show()
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.png',dpi=1000)
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.pdf',dpi=1000)
@@ -983,11 +990,18 @@ class TurbiditySim:
         plt.xlabel('time')
         plt.ylabel('concentration')
 
-def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],Sims=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=50,finalTime=40.):
-    if Sims == None:
+def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],SimPack=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=200,finalTime=40.,save=True):
+    
+    if SimPack == None:
         Sims = []
+        NoCollSims = []
+        LeftCurr = TurbiditySim(1.0,1.0,U_s,rootFile,['d2'], subFile='sims/OneCurrOnly_', sharp=sharp, N=N, finalTime=finalTime)
         for sim in SimVars:
             Sims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d1','d2'], sharp=sharp, N=N, finalTime=finalTime))
+            NoCollSims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d2'], subFile='sims/OneCurrOnly_', sharp=sharp, N=N, finalTime=finalTime))
+    else: 
+        Sims,NoCollSims,LeftCurr = SimPack
+    LeftCurr_d1 = np.flip(LeftCurr.d2[-1,:])
 
     yMax = 0
     for sim in Sims:
@@ -995,10 +1009,16 @@ def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.0
         yMax = max(yMax,np.max(D))
     print(yMax)
 
-    for sim in Sims:
-        sim.plot_deposit_gradient(dt_plot=0.1,show=False,save=True,xb=20)
+    for coll,no_coll in zip(Sims,NoCollSims):
+        coll.plot_deposit_gradient(dt_plot=0.1,show=False,save=False,xb=20,yb=yMax,close=False,title=True)
+        plt.plot(no_coll.x, no_coll.d2[-1,:] + LeftCurr_d1, label = 'No Collision')
+        plt.legend()
+        plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
+        if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.png',dpi=1000)
+        #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
+        plt.close()
   
-    return Sims
+    return Sims,NoCollSims,LeftCurr
 
     
 def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
