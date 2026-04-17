@@ -1036,7 +1036,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
             Sims.append(TurbiditySim(sim[0],sim[1],0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
     
     plt.figure(figsize=[5.125,3])
-    legend_list = ['SW','Box','']
+    legend_list = ['SWE','Box Model','']
     legend_colors = ['k']*2 + ['white']
     legend_linestyles = list(mpllinestyles[:2]) + ['solid']
     for i,sim in enumerate(Sims):
@@ -1045,14 +1045,18 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
         plt.subplot(211)
         plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
         plt.plot(t_num,B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
-        plt.xlabel('time, $t$')
+        # plt.xlabel('time, $t$')
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
+        plt.xlim([0,None])
+        plt.ylim([0,None])
         
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
         plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
-        plt.xlabel('time, $t$')
+        plt.xlabel('time post-collision, $t-t_c$')
         plt.ylabel('position, $x_b$')
+        plt.xlim([0,None])
+        plt.ylim([0,None])
         legend_list.append('$h_0$=%0.2f, $c_0$=%0.2f'%(sim.hR0,sim.cR0))
 
     legend_colors += list(tabcolors[:len(Sims)])
@@ -1060,10 +1064,10 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
     #for sp in [2,1]:
     #    plt.subplot(2,1,sp)
     leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.25,1.6))
-    for i,j in enumerate(leg.legendHandles):
+    for i,j in enumerate(leg.legend_handles):
         j.set_color(legend_colors[i])
         j.set_linestyle(legend_linestyles[i])
-    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.38)
+    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.18)
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
     plt.close()
@@ -1084,32 +1088,36 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
             Sims.append(TurbiditySim(1.0,1.0,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
     
     plt.figure(figsize=[5.125,3.])
-    legend_list = ['SW','Box','']
+    legend_list = ['SWE','Box Model','']
     legend_colors = ['k']*2 + ['white']
     legend_linestyles = list(mpllinestyles[:2]) + ['solid']
     for i,sim in enumerate(Sims):
         sim.bore_data()
         t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = sim.settling_RH_model(hmf=shape_factor,dt=dt)
         plt.subplot(211)
-        plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
-        plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
-        plt.xlabel('time, $t$')
-        plt.ylabel('position, $x_b$')
-        
-        plt.subplot(212)
         plt.plot(sim.t_post,sim.vel(sim.bore),color=tabcolors[i],linestyle = mpllinestyles[0])
         plt.plot(t_num,B_vel,color=tabcolors[i],linestyle = mpllinestyles[1])
-        plt.xlabel('time, $t$')
+        # plt.xlabel('time post-collision, $t-t_c$')
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
+        plt.ylim([0,None])
+        plt.xlim([0,None])
+        
+        plt.subplot(212)
+        plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
+        plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
+        plt.xlabel('time post-collision, $t-t_c$')
+        plt.ylabel('position, $x_b$')
+        plt.xlim([0,None])
+        plt.ylim([0,None])
         legend_list.append('$U_s=$%0.2f'%(sim.U_s))
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
     leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.25,1.6))
-    for i,j in enumerate(leg.legendHandles):
+    for i,j in enumerate(leg.legend_handles):
         j.set_color(legend_colors[i])
         j.set_linestyle(legend_linestyles[i])
-    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.38)
+    plt.subplots_adjust(left = 0.11, top = 0.98, bottom = 0.14, right = 0.7, hspace = 0.18)
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.pdf')
     plt.savefig(sim.rootFile + 'solutions/plots/' + f'BoxSW_Settling_DiffHC_shapefactor{shape_factor:0.2}'.replace('.','_') + '.png',dpi=600)
     plt.close()
@@ -1131,7 +1139,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
     leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.15,1.))
-    for i,j in enumerate(leg.legendHandles):
+    for i,j in enumerate(leg.legend_handles):
         j.set_color(legend_colors[i])
         j.set_linestyle(legend_linestyles[i])
     plt.subplots_adjust(left=0.09,bottom=0.19,top=0.97,right=0.78)
@@ -1176,7 +1184,7 @@ def suspended_concentration(US, RootFile):
     colors = ['k']*2 + ['white']*2 + list(tabcolors[:len(US)]) 
     linestyles = ['dashed'] + ['solid']*7
     leg = plt.legend(legendlist,ncol=2)#,loc='upper center', bbox_to_anchor=(0.5, -0.23))
-    for i,j in enumerate(leg.legendHandles):
+    for i,j in enumerate(leg.legend_handles):
         j.set_color(colors[i])
         j.set_linestyle(linestyles[i])
     plt.savefig('suspended_contration.pdf')
@@ -1200,7 +1208,7 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
         colors = ['k' for i in range(len(US))] + list(tabcolors[:2])
         leg = plt.legend(legendlist,ncol=len(legendlist),loc='upper center', bbox_to_anchor=(0.5, -0.23))
         linestyles = list(mpllinestyles[:3]) + ['solid' for i in range(2)]
-        for i,j in enumerate(leg.legendHandles):
+        for i,j in enumerate(leg.legend_handles):
             j.set_color(colors[i])
             j.set_linestyle(linestyles[i])
 
@@ -1225,7 +1233,7 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
         #colors = ['k' for i in range(len(US))] + list(tabcolors[:2])
         plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
         #linestyles = list(mpllinestyles[:3]) + ['solid' for i in range(2)]
-        #for i,j in enumerate(leg.legendHandles):
+        #for i,j in enumerate(leg.legend_handles):
         #    j.set_color(colors[i])
         #    j.set_linestyle(linestyles[i])
 
@@ -1793,57 +1801,68 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
     NumericalValidation_Sharp()
     NumericalValidation_CFL()
 
-def article_plots():
+def article_plots(Figs=list(range(1,12))):
     article_params()
-    MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
-    MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
-    # Figure 1,  Example solution for numerics discussion
-    # Remove shading
-    # Add x_i to left panel
-    # Make arrows thinner
-    # leave h_r/c_r 
-    # Keep all axes equal
-    # vertically stacked, with no space between figures (since they have a shared axis), with tick marks on each axis (but no labels) 
-
-    # Figure 2,  Numerical validation for spatial resolution
-
-    # Figure 3,  Numerical validation for Reynolds number
-
-    # Figure 4,  Results - solution profile
-    # Make it look not dumb
-    # needs to go somewhere else, but not sure where
-    # Make a matching MP4 to go with supplemental materials 
-
-    # Figure 5,  Results - Space time plot
-    # Add test case matching figure 4
-
-    # Figure 6,  Sediment deposition - example solutions
-    # Matching vertical axes
-    # vertically stacked
-    # Separate figures, since each one is a different run
-
-    # Figure 7,  Sediment deposition - Encroachment mass colormap
-    MainDep.myPcolor('encroachment_mass','',save=True)
-    # add a,b,c,d at correct locations aligning with figure 6
-    # change labels to c_r and h_r
-    # only 1 significant digit on the colorbar
-
-    # Figure 8,  Sediment deposition - Encroachment mass 3D view with planar approximation
-    # This figure goes away, find a "best fit" parameter to report for planes. 
-
-    # Figure 9,  Box model - schematic
-    MainSim.box_model_schematic(6,show=False)
-    # Remove top two panels, they are redundant with figure 1
-    # Switch to be avg h-/+ for third panel
-
-    # Figure 10, Box model - results - asymmetric currents with no shape factor
-    # Change velocity ymin to be 0
-    # make 0 lower bound be tight on all plots. 
-    # kill the horizontal label on top subplot. 
-    Box_SWE_Asym()
-    # Figure 11, Box model - results - asymmetric currents with shape factor = 0.9
-    # Change velocity ymin to be 0
-    Box_SWE_Asym(shape_factor=0.9)
-    # Figure 12
-    # Change velocity ymin to be 0
-    Box_SWE_Settling()
+    if 8 in Figs:
+        MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
+    if 6 in Figs:
+        MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
+    if 1 in Figs:
+        pass
+        # Figure 1,  Results - solution profile
+        # Make it look not dumb
+        # needs to go somewhere else, but not sure where
+        # Make a matching MP4 to go with supplemental materials 
+    if 2 in Figs:
+        pass
+        # Figure 2,  Example solution for numerics discussion
+        # Remove shading
+        # Add x_i to left panel
+        # Make arrows thinner
+        # leave h_r/c_r 
+        # Keep all axes equal
+        # vertically stacked, with no space between figures (since they have a shared axis), with tick marks on each axis (but no labels) 
+    if 3 in Figs:
+        pass
+        # Figure 3,  Numerical validation for spatial resolution
+    if 4 in Figs:
+        pass
+        # Figure 4,  Numerical validation for Reynolds number
+    if 5 in Figs:
+        pass
+        # Figure 5,  Sediment deposition - example solutions
+        # Matching vertical axes
+        # vertically stacked
+        # Separate figures, since each one is a different run
+    if 6 in Figs:
+        # Figure 6,  Sediment deposition - Encroachment mass colormap
+        MainDep.myPcolor('encroachment_mass','',save=True)
+        # add a,b,c,d at correct locations aligning with figure 6
+        # change labels to c_r and h_r
+        # only 1 significant digit on the colorbar
+        # OLD Figure,  Sediment deposition - Encroachment mass 3D view with planar approximation
+        # This figure has gone away,
+        # but we want find a "best fit" parameter to report for planes. 
+    if 7 in Figs:
+        pass
+        # Figure 7,  Results - Space time plot
+        # Add test case matching figure 4
+    if 8 in Figs:
+        # Figure 8,  Box model - schematic
+        MainSim.box_model_schematic(6,show=False)
+        # Remove top two panels, they are redundant with figure 1
+        # Switch to be avg h-/+ for third panel
+    if 9 in Figs:
+        # Figure 9, Box model - results - asymmetric currents with no shape factor
+        # Change velocity ymin to be 0
+        # make 0 lower bound be tight on all plots. 
+        # kill the horizontal label on top subplot. 
+        Box_SWE_Asym()
+    if 10 in Figs:
+        # Figure 10, Box model - results - asymmetric currents with shape factor = 0.9
+        # Change velocity ymin to be 0
+        Box_SWE_Asym(shape_factor=0.9)
+    if 11 in Figs:
+        # Figure 11
+        # Change velocity ymin to be 0
+        Box_SWE_Settling()
