@@ -542,7 +542,6 @@ class TurbiditySim:
                     #bore_local_loc = (x_bore[bore_local_index]-x_bore[bore_local_index+1])*(new_thresh-h_bore[bore_local_index+1])/(h_bore[bore_local_index]-h_bore[bore_local_index+1])+x_bore[bore_local_index+1] # Linear approximation between nodes values for height immediately above/below threshold
                     #print(bore_local_loc,bore_loc)
 
-                     
                     t_post.append(t-self.coll_time)
                     u_minus.append(u_bore[u_mbi])
                     u_plus.append(u_bore[u_pbi])
@@ -550,12 +549,12 @@ class TurbiditySim:
                     h_plus.append(h_bore[u_pbi])
 
                     front_loc = self.x[front_index]
-                   
+
                     cmA, cpA = average_cp_cm(self,bore_loc,c_,front_loc)
                     print(t,cpA,cmA)
-                    
-                    HMA = np.sum(h_[self.coll_idx:bore_index])*self.dx/(bore_loc-self.coll_loc)
-                    HPA = np.sum(h_[bore_index:front_index])*self.dx/(front_loc-bore_loc)
+
+                    HMA = np.sum(h_fake[self.coll_idx:bore_index])*self.dx/(bore_loc-self.coll_loc)
+                    HPA = np.sum(h_fake[bore_index:front_index])*self.dx/(front_loc-bore_loc)
                     h_minus_avg.append(HMA)
                     h_plus_avg.append(HPA)
                     c_minus_avg.append(cmA)
@@ -563,7 +562,7 @@ class TurbiditySim:
                     bore.append(bore_loc)
                     #front_loc = (x[front_index]-x[front_index+1])*(2*h_min-h_[front_index+1])/(h_[front_index]-h_[front_index+1])+x[front_index+1]
                     front.append(front_loc)
-                if plot: 
+                if plot:
                     plt.subplot(212)
                     plt.xlabel('x')
                     plt.ylabel('velocity')
@@ -573,7 +572,7 @@ class TurbiditySim:
                     plt.ylabel('height')
 
                     plt.legend()
-    
+
             array_to_save=np.array((np.array(t_post),np.array(bore),np.array(h_plus),np.array(h_minus),np.array(u_plus),np.array(u_minus),np.array(h_plus_avg),np.array(h_minus_avg),np.array(c_plus_avg),np.array(c_minus_avg),np.array(front))).T
             if save: np.savetxt(self.rootFile + 'solutions/postData/post_collision_bore_data_' + self.fileName + '.csv',array_to_save,delimiter=',')
         def subsample(x,subSampleBy = subSampleBy):
@@ -787,26 +786,26 @@ class TurbiditySim:
         plt.plot([0, front_pos],2*[0],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
         plt.plot([bore_pos, front_pos],2*[hp],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
         plt.plot([front_pos]*2,[0, hp],color = 'k' if mp4 else LC,linestyle = 'dashed',linewidth = 2)
- 
-    def box_model_schematic(self,time,show=True):
+
+    def box_model_schematic(self,time,show=True,h_pm = 'avg'):
         self.bore_data()
         idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
         bore_pos = self.bore[idx]
         front_pos = self.front_data[idx]
-        hp = self.hP_data[idx]
-        hm = self.hM_data[idx]
+        hp = self.hP_data_avg[idx] if h_pm == 'avg' else self.hP_data[idx]
+        hm = self.hM_data_avg[idx] if h_pm == 'avg' else self.hM_data[idx]
         up = self.uP_data[idx]
         um = self.uM_data[idx]
         x_upper_bound = np.ceil(1.05*front_pos)
-    
+        breakpoint()
+
         article_params()
         plt.figure(figsize=[5.125,4])
-    
+
         # Plot 1, height plot with h+,h-,xN,xB labeled
         plt.subplot(311)
-        self.plot_time('h', time, xlim=[0,x_upper_bound])
-        #self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
-    
+        # self.plot_time('h', time, xlim=[0,x_upper_bound])
+        self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
         AP = dict(facecolor='black',width = 1, headwidth = 6,headlength=8) #Arrow properties for annotation
         yb_min = plt.gca().get_ylim()[0] # yb is y bounds, so I want the y bound minimum
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
@@ -815,11 +814,11 @@ class TurbiditySim:
         plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.gca().set_xticks([0,5,10])
-         
+
         # Plot 2, velocity plot with u+,u-,xN,xB labeled
         plt.subplot(312)
-        self.plot_time('u', time, xlim=[0,x_upper_bound])
-        #self.plot_time('u', time, xlim=[-x_upper_bound,x_upper_bound])
+        # self.plot_time('u', time, xlim=[0,x_upper_bound])
+        self.plot_time('u', time, xlim=[-x_upper_bound,x_upper_bound])
         plt.xlabel('$x$')
         yb_min = plt.gca().get_ylim()[0]
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
@@ -828,7 +827,7 @@ class TurbiditySim:
         plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
         plt.gca().set_xticks([0,5,10])
-    
+
         # Plot 3, schematic for box model with "ghost" box drawn
         plt.subplot(313)
         self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
@@ -836,8 +835,8 @@ class TurbiditySim:
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
         plt.annotate('$x_b$',xy=(bore_pos, yb_min), xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
         plt.annotate('$x_N$',xy=(front_pos,yb_min), xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
-        plt.annotate('$2x_i-x_N$',xy=(self.apart-front_pos,yb_min), xytext=(self.apart-front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
-        L1,L2 = self.get_oneSided_boxModel_vertices(time,self.t_post,self.front_data,self.bore,self.hP_data,self.hM_data)
+        plt.annotate('$2X_i-x_N$',xy=(self.apart-front_pos,yb_min), xytext=(self.apart-front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
+        L1,L2 = self.get_oneSided_boxModel_vertices(time,self.t_post,self.front_data,self.bore,self.hP_data_avg if h_pm == 'avg' else self.hP_data,self.hM_data_avg if h_pm == 'avg' else self.hM_data)
         plt.plot(L1[0],L1[1],linestyle='dashed',linewidth=2,color='k')
         plt.plot(L2[0],L2[1],linestyle='dashed',linewidth=2,color='k')
         plt.plot([self.coll_loc]*2,[0,hm],linestyle = 'dashed',linewidth=1,color='k')
@@ -850,8 +849,9 @@ class TurbiditySim:
         plt.gca().add_patch(Rectangle((self.apart-front_pos,0),front_pos-self.apart,hp,alpha=0.7,color=ghost_box_color))
         plt.gca().add_patch(Rectangle((self.coll_loc,hp),bore_pos-self.coll_loc,hm-hp,alpha=0.7,color=ghost_box_color))
         plt.gca().add_patch(FancyArrowPatch((self.coll_loc-xRad,hp), (self.coll_loc,hp+yRad),connectionstyle="arc3,rad=-0.55",arrowstyle="simple,head_width=6,head_length=8",linewidth=2,color=ghost_box_color))
-    
-        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45) 
+
+        # plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45)
+        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.0)
         if show:
             plt.show()
         else:
@@ -869,13 +869,13 @@ class TurbiditySim:
         um = self.uM_data[idx]
 
         x_u = np.ceil(1.05*front_pos)
-        x_l = np.floor(1.05*self.x[np.argwhere(self.h[np.argmin(np.abs(self.T-time)),:]>2*self.h_min)[0][0]]) 
+        x_l = np.floor(1.05*self.x[np.argwhere(self.h[np.argmin(np.abs(self.T-time)),:]>2*self.h_min)[0][0]])
         x_upper_bound =  max(x_u,np.abs(x_l))
         x_lower_bound = -max(x_u,np.abs(x_l))
 
         article_params()
         plt.figure(figsize=[6.5,1.3])
-  
+
         plt.subplot(131)
         #self.plot_height_conc_time(0,xlim=[-5,5],cb=False)
         self.plot_time('h', 0, xlim=[-5,5])
@@ -899,7 +899,6 @@ class TurbiditySim:
         plt.text(x_lower_bound+0.05*(x_upper_bound-x_lower_bound),plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%time)
         #plt.gca().set_xticks([-10,0,10])
         plt.gca().set_xticks([-12,-6,0,6,12])
-         
 
         plt.subplot(133)
         self.plot_time('u', time, xlim=[x_lower_bound,x_upper_bound])
@@ -1017,14 +1016,12 @@ def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.0
         if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.png',dpi=1000)
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
-  
     return Sims,NoCollSims,LeftCurr
 
-    
 def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
     '''
     This function plots the position and the velocity of the bore
-    for both the Box Model and Shallow Water Model. 
+    for both the Box Model and Shallow Water Model.
     Here, settling is assumed to be 0, and the asymmetry is varied.
     in Box_SWE_Settling(), the settling is nonzero, but the currents are symmetric.
     '''
@@ -1034,7 +1031,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
         Sims = []
         for sim in SimVars:
             Sims.append(TurbiditySim(sim[0],sim[1],0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
-    
+
     plt.figure(figsize=[5.125,3])
     legend_list = ['SWE','Box Model','']
     legend_colors = ['k']*2 + ['white']
@@ -1049,7 +1046,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         plt.xlim([0,None])
         plt.ylim([0,None])
-        
+
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
         plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
@@ -1113,7 +1110,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
-    leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.25,1.6))
+    leg = plt.legend(legend_list,ncol=1,loc='upper center', bbox_to_anchor=(1.195,1.6))
     for i,j in enumerate(leg.legend_handles):
         j.set_color(legend_colors[i])
         j.set_linestyle(legend_linestyles[i])
