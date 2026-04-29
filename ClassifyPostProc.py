@@ -9,7 +9,7 @@ import matplotlib.animation as ani
 import matplotlib.ticker as tkr
 from matplotlib.patches import Rectangle, FancyArrowPatch
 from celluloid import Camera
-from os import getcwd
+import os
 import seaborn as sns
 from copy import deepcopy
 import plotly.graph_objects as go
@@ -25,9 +25,48 @@ Every row after the first should be the time followed by the cell averages
 """
 
 def article_params():
-    plt.rcParams.update({"text.usetex":True,"figure.figsize":[3.5,3],"font.family": "serif","font.sans-serif": ["Helvetica"],'font.size':10,'lines.linewidth':2,'legend.fontsize':9,'xtick.labelsize':8,'ytick.labelsize':8})
+    plt.rcParams.update(
+        {
+            "text.usetex":True,
+            "figure.figsize":[3.5,3],
+            "font.family":"serif",
+            "font.sans-serif":["Helvetica"],
+            'font.size':10,
+            'lines.linewidth':2,
+            'legend.fontsize':9,
+            'xtick.labelsize':8,
+            'ytick.labelsize':8
+        }
+    )
 def viewing_params():
-    plt.rcParams.update({"text.usetex":False,"figure.figsize":[12,9],"font.family": "serif","font.sans-serif": ["Helvetica"],'font.size':22,'lines.linewidth':3,'legend.fontsize':20,'xtick.labelsize':20,'ytick.labelsize':20})
+    plt.rcParams.update(
+        {
+            "text.usetex":False,
+            "figure.figsize":[12,9],
+            "font.family":"serif",
+            "font.sans-serif":["Helvetica"],
+            'font.size':22,
+            'lines.linewidth':3,
+            'legend.fontsize':20,
+            'xtick.labelsize':20,
+            'ytick.labelsize':20
+        }
+    )
+def panel_label(ax,subplot_number = None):
+    label_list = ['a','b','c','d','e','f','g','h']
+    label = f"({label_list[subplot_number if subplot_number else ax.get_subplotspec().num1]})"
+    X = ax.get_xlim()
+    Y = ax.get_ylim()
+    x_pos = X[0] + 0.04*(X[1]-X[0])
+    y_pos = Y[0] + 0.80*(Y[1]-Y[0])
+    plt.text(
+        x_pos,
+        y_pos,
+        label,
+        horizontalalignment = 'center',
+        verticalalignment = 'center',
+        bbox=dict(facecolor='white',alpha = 0.75,linewidth=0,boxstyle='round,pad=0.3')
+    )
 viewing_params()
 tabcolors = ('tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','tab:pink','tab:gray','tab:olive','tab:cyan')
 mpllinestyles = ('solid','dashed','dotted','dashdot',(0, (3, 5, 1, 5, 1, 5)))
@@ -78,7 +117,7 @@ class TurbiditySim:
         self.FrSquared = FrSquared
         self.hL0 = hL0
         self.cL0 = cL0
-        
+
         self.fileName = "hTwo%0.2f_cTwo%0.2f_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_Us%0.3f_hmin%0.5f_sharp%i"%(self.hR0,self.cR0,self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.U_s,self.h_min,self.sharp)
         try:
             with open(self.rootFile + self.subFile + self.fileName + '/info.log'):
@@ -86,7 +125,7 @@ class TurbiditySim:
         except FileNotFoundError as err:
             print('FileNotFoundError:',err)
             self.fileName = "hOne%0.2f_hTwo%0.2f_cOne%0.2f_cTwo%0.2f_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_NuPe%i_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%i"%(self.hL0,self.hR0,self.cL0,self.cR0,self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.NuPe,self.FrSquared,self.U_s,self.h_min,self.sharp)
-        
+
         self.unpack(VARS)
         try:
             self.dt = self.T[1]-self.T[0]
@@ -95,13 +134,13 @@ class TurbiditySim:
         self.dx = self.x[1]-self.x[0]
         with open(self.rootFile + self.subFile + self.fileName + '/info.log') as fh:
             for line in fh:
-                if 'Run time was ' in line: 
+                if 'Run time was ' in line:
                     self.runTime = float(line[line.find('was')+4:line.find('seconds')-1])
-                if 'collision time:' in line: 
+                if 'collision time:' in line:
                     self.coll_time = float(line[line.find('=')+1:])
-                if 'collision index:' in line: 
+                if 'collision index:' in line:
                     self.coll_idx = int(float(line[line.find('=')+1:]))
-                if 'collision position:' in line: 
+                if 'collision position:' in line:
                     self.coll_loc = float(line[line.find('=')+1:])
 
     def unpack(self, whichVars):
@@ -109,7 +148,7 @@ class TurbiditySim:
             """
             Argument is the file name of the data
             When loading data, Each row is a ''time slice'' which is a vector of the function values at each point in space
-        
+
             The first row is the initial time and then spatial vector of the center of the cells
             The first column is the time values, with the initial time listed twice, see above comment
             Removing the first column and first row you are left with a matrix of the function values (rows are time slices)
@@ -122,7 +161,7 @@ class TurbiditySim:
             self.T = A[1:,0]
             DependentVariable = A[1:,1:]
             if whichFile in char_vars:
-                try: 
+                try:
                     DependentVariable = DependentVariable/self.h
                 except AttributeError:
                     self.h = single_unpack('h')
@@ -142,7 +181,7 @@ class TurbiditySim:
         plt.rcParams.update({"text.usetex":False})
         fig = plt.figure(figsize=(12,8))
         camera = Camera(fig)
-    
+
         U = []
         for var in varList:
             U.append(getattr(self,var))
@@ -165,7 +204,7 @@ class TurbiditySim:
                 plt.subplot(2,1,int(subplotcounter/2))
                 plot_ = plt.plot(self.x,u[ii,:],color=tabcolors[jj],linestyle = mpllinestyles[0])
                 plt.grid()
-    
+
             plt.subplot(211)
             plt.xlim(xlim)
             plt.ylim([ymin1,ymax1])
@@ -180,7 +219,7 @@ class TurbiditySim:
             #plt.ylim([ymin2,ymax2])
             print(self.T[ii])
             camera.snap()
-    
+
         if show_legend:
             Legend = []
             for var in varList:
@@ -189,11 +228,11 @@ class TurbiditySim:
             plt.legend(Legend[:2],loc= 'upper left')
             plt.subplot(212)
             plt.legend(Legend[2:],loc= 'upper left')
-    
+
         animat = camera.animate()
 
         Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
-        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/"
+        VidPath = os.getcwd()[:os.getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/"
         animat.save(VidPath + self.fileName.replace('.','_') + '_tMax%i'%tMax + '.mp4', writer = Writ)
         plt.close()
 
@@ -204,10 +243,10 @@ class TurbiditySim:
         that can draw the one-sided box model.
 
         I return 2 separate lists to draw two lines, becuase one long list will
-        double draw the box in some region, which is fine for soild lines, but 
-        is noticeable for dashed lines. 
-  
-        WARNING! t is the original time, but T is shift so that T=0 is coll. 
+        double draw the box in some region, which is fine for soild lines, but
+        is noticeable for dashed lines.
+
+        WARNING! t is the original time, but T is shift so that T=0 is coll.
         t-self.coll_time shifts t to be in the same time frame as T.
         '''
         if t<self.coll_time:
@@ -216,23 +255,23 @@ class TurbiditySim:
         xb,xn = xB[idx],xN[idx]
         hp,hm = hP[idx],hM[idx]
         xc = self.coll_loc
-        
+
         return [[xc,xn,xn,xb],[0,0,hp,hp]],[[xc,xb,xb],[hm,hm,0]]
-    
+
     def BoxSWE_MP4(self, tMax=1e8, xlim = [0,None], framerate = 30., shape_factor = 0.9):
         '''
-        This function generates an mp4 coomparing shallow-water data to box model. 
+        This function generates an mp4 coomparing shallow-water data to box model.
         There are two subplots in the mp4, the first (top) is an a fixed axis,
         which is everything to the right of the collision point;
         the second (bottom) has dynamic axes so that the current, to the right of the
-        collision point, fills the view. 
+        collision point, fills the view.
 
         The no shape factor case (shape_factor=1) is always shown, and a second version
         with a shape_factor (shape_factor = 0.9 is default) is also plotted.
         '''
         article_params()
         plt.rcParams.update({"text.usetex":False})
-    
+
         fig,ax = plt.subplots(2,1,figsize=(6,4))
         t_num,   xN,   xB,   hP,   hM,   uP,   cM,   cP,   B_v    = self.settling_RH_model(hmf = 1.0)
         t_num_SF,xN_SF,xB_SF,hP_SF,hM_SF,uP_SF,cM_SF,cP_SF,B_v_SF = self.settling_RH_model(hmf = shape_factor) # SF subscript to denote shape factor
@@ -287,11 +326,11 @@ class TurbiditySim:
 
             print('t = %0.2f'%(t))
             return Plot1_SWline, Plot2_SWline, Plot1_SWline, Plot1_BMline1, Plot1_BMline2, Plot1_BMline1_SF, Plot2_BMline1, Plot2_BMline2, Plot2_BMline1_SF, Plot2_BMline2_SF
-    
+
 
         anim = ani.FuncAnimation(fig,func,frames = self.T[self.T<tMax],blit=False)
         Writ = ani.FFMpegWriter(fps=framerate, metadata=dict(artist='nathan'))
-        VidPath = getcwd()[:getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWE_shapefactor%0.1f_"%shape_factor
+        VidPath = os.getcwd()[:os.getcwd().find('/D')+1] + "Documents/MercedResearch/WithFrancois/Turbidity/FinVol/" + self.rootFile + "solutions/videos/BoxSWE_shapefactor%0.1f_"%shape_factor
         tMaxString = '_tMax%i'%tMax if tMax<100 else ''
         anim.save(VidPath + self.fileName.replace('.','_') + tMaxString + '.mp4', writer = Writ)
         plt.close()
@@ -315,8 +354,8 @@ class TurbiditySim:
         except AttributeError:
             self.unpack(['c2'])
             c2_ = self.c2[index,x_min_idx:x_max_idx]
-    
-        
+
+
         polygon = plt.fill_between(x_,h_*0,h_,lw=1,color='none')
         #gradient_denominator = np.array([c1_[ii]+c2_[ii] if c1_[ii]+c2_[ii]!=0 else 1 for ii in range(len(self.x))])
         verts = np.vstack([p.vertices for p in polygon.get_paths()])
@@ -329,7 +368,7 @@ class TurbiditySim:
         gradient.set_clip_path(polygon.get_paths()[0], transform=plt.gca().transData)
         #plt.plot(self.x,c1_+c2_,color='k',linewidth=1)
         plt.plot(x_,h_)
-    
+
         if cb:
             cbar=plt.colorbar(gradient)
             if cb_choice == 'initial':
@@ -338,7 +377,7 @@ class TurbiditySim:
             elif cb_choice == 'dynamic':
                 cbar.set_ticks(ticks=[np.min(c1_-c2_),np.max(c1_-c2_)])
                 cbar.ax.set_yticklabels(['$100\%\ c_2$','$100\%\ c_1$'])
-    
+
         plt.xlabel('$x$')
         plt.ylabel(variable_dict['h'])
 
@@ -357,21 +396,62 @@ class TurbiditySim:
         plt.xlim(xlim)
         if wl: plt.legend()
 
-    def plot_examples(self,var,times=[0,4,8,12]):
+
+    def plot_profile_results(self,var,times=[0,4,8,12]):
         article_params()
-        plt.figure(figsize = [8,4])
+        plt.figure(figsize = [5.125,4])
         for i,v in enumerate(var):
             plt.subplot(len(var),1,i+1)
-            self.plot_times(v,times,xlim=[-10,10],wl=False)
+            self.plot_times(v,times,xlim=[-25,25],wl=False)
             plt.ylabel(variable_dict[v + '_latex'])
-            if i < len(var)-1: plt.gca().set_xticks([])
-        
+            # if i < len(var)-1: plt.gca().set_xticks([])
+            if i < len(var)-1: plt.gca().tick_params(axis='x', labelbottom=False)
+        # Make the vetical axis bounds be symmetric across 0 for velocity. 
+        if 'u' in var:
+            plt.subplot(len(var),1,var.index('u')+1)
+            vel_bound = np.max(np.abs(plt.gca().get_ylim()))
+            plt.ylim([-vel_bound,vel_bound])
+        # Make the concentrations plot with the same vertical axis 
+        # Maybe these should be fixed at 1, currently I find the max ymax and set that for both.
+        if 'c1' in var and 'c2' in var:
+            # Fine which concentration has higher max
+            plt.subplot(len(var),1,var.index('c1')+1)
+            cmax1 = plt.gca().get_ylim()[1]
+            plt.subplot(len(var),1,var.index('c2')+1)
+            cmax2 = plt.gca().get_ylim()[1]
+            cmax  = max(cmax1,cmax2)
+            # Set that max value for both plots. 
+            plt.subplot(len(var),1,var.index('c1')+1)
+            plt.ylim([None,cmax])
+            plt.subplot(len(var),1,var.index('c2')+1)
+            plt.ylim([None,cmax])
+        # Set legend of times above top plot
         plt.subplot(len(var),1,1)
-        plt.legend(['$t=%0.1f$'%t for t in times],ncol=len(times),loc='upper center', bbox_to_anchor=(0.5, 1.6))
+        plt.legend(
+            ['$t=%0.1f$'%t for t in times],
+            ncol=len(times),
+            loc='upper center',
+            bbox_to_anchor=(0.5, 1.4)
+        )
+        # Set axis for bottom plot
         plt.subplot(len(var),1,len(var))
         plt.xlabel('$x$')
-        plt.savefig(self.rootFile + 'solutions/plots/solution_example_' + self.fileName + '.png', bbox_inches='tight',dpi=400)
-        
+        # Add panels 
+        for i in range(1,len(var)+1):
+            plt.subplot(len(var),1,i)
+            panel_label(plt.gca())
+
+        # Format and save
+        plt.subplots_adjust(right=0.99,left =0.1,bottom=0.1,top =0.925,hspace=0.1)
+        plt.savefig(
+            self.rootFile + 'solutions/plots/solution_example_' + self.fileName + '.png',
+            bbox_inches='tight',
+            dpi=400
+        )
+        plt.savefig(
+            self.rootFile + 'solutions/plots/solution_example_' + self.fileName + '.pdf',
+            bbox_inches='tight',
+        )
 
     def deposition_details(self):
         dx = self.x[1]-self.x[0]
@@ -384,10 +464,10 @@ class TurbiditySim:
 
         two_sided_encroachment = np.hstack([self.r2l,self.l2r])
         two_sided_x = np.hstack([self.xl,self.xr])
-        
+
         l2r_mass = np.sum(self.l2r)*dx
         r2l_mass = np.sum(self.r2l)*dx
- 
+
         #self.encroachment_mass = l2r_mass if l2r_mass >= r2l_mass else r2l_mass
         #self.COM_x = np.sum(self.xr*self.l2r)*dx/l2r_mass if l2r_mass >= r2l_mass else np.sum(self.xl*self.r2l)*dx/r2l_mass
         self.encroachment_mass = l2r_mass - r2l_mass
@@ -412,20 +492,20 @@ class TurbiditySim:
             gradient = plt.imshow(np.reshape(self.d1[tI,:]/gradient_denominator,(1,-1)),cmap = 'PRGn',aspect = 'auto',extent=[verts[:, 0].min(), verts[:, 0].max(), verts[:, 1].min(), verts[:, 1].max()])
             gradient.set_clip_path(polygon.get_paths()[0], transform=plt.gca().transData)
         plt.plot(self.x,self.d1[-1,:]+self.d2[-2,:],color='k',linewidth=1)
-    
+
         if cb:
             cbar=plt.colorbar(gradient,aspect=5,pad=0.01)
             cbar.set_ticks(ticks=[0,1])
             cbar.ax.set_yticklabels(['$100\%\ d_2$','$100\%\ d_1$'])
-    
+
         plt.xlabel('$x$',labelpad=0)
         #plt.ylabel('$d_{f,1}+d_{f,2}$')
         plt.ylabel('deposit height')
-    
+
         xb = xb if xb else max(np.abs(self.x[self.d1[-1,:]>xb_tol][0]),np.abs(self.x[self.d2[-1,:]>xb_tol][-1]))
         plt.xlim([-xb,xb])
         plt.ylim([0,yb])
-        if title: 
+        if title:
             plt.title('$h_r=%0.2f$, $c_r=%0.2f$'%(self.hR0,self.cR0))
             plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
         else:
@@ -445,7 +525,7 @@ class TurbiditySim:
         #plt.scatter(self.COM_x,self.encroachment_mass,)
         plt.plot([self.coll_loc]*2,[0,max(np.max(self.l2r),np.max(self.r2l))],color = 'k',linestyle = 'dashed',label = 'collision location $(x_c)$: %0.2f'%self.coll_loc,linewidth = 2)
         plt.plot([self.COM_x]*2,[0,max(np.max(self.l2r),np.max(self.r2l))],color = 'red',linestyle = 'dashed',label = 'COM $x$-coordinate: %0.2f'%self.COM_x)
-        try: 
+        try:
             xMin = self.xl[np.argwhere(self.r2l>0.01*np.max(self.r2l))[0][0]]
             xMax = self.xr[np.argwhere(self.l2r>0.01*np.max(self.l2r))[-1][0]]
             plt.xlim([xMin,xMax])
@@ -475,7 +555,7 @@ class TurbiditySim:
             cp = CR_temp[b_idx:]
             cm = CR_temp[:b_idx]
             return avg(cm,a_bd,xB),avg(cp,xB,front)
-        try: 
+        try:
             C=np.loadtxt(self.rootFile + 'solutions/postData/post_collision_bore_data_'+ self.fileName + '.csv',delimiter=',')
             t_post = C[:,0]
             bore = C[:,1]
@@ -484,7 +564,7 @@ class TurbiditySim:
             h_plus_avg,   h_minus_avg   = C[:,6], C[:,7]
             c_plus_avg,   c_minus_avg   = C[:,8], C[:,9]
             front = C[:,10]
-        except OSError: 
+        except OSError:
             print('cannot open, so I will post process the data MYSELF!')
             t_post = []
             u_plus, u_minus = [],[]
@@ -503,14 +583,14 @@ class TurbiditySim:
                 h_ = deepcopy(h_fake) # Same as above
                 c_ = deepcopy(c_fake) # Same as above
                 window_size = int(self.N*0.0025) # Create a "viewing window" so that the search for the bore is only local to the previous bore. 
-                if (not post_collision) and h_[bore_index]>2*self.h_min and np.max(h_)<h_max and self.x[np.argmax(h_)]<2 and t>t_start:
+                if (not post_collision) and h_[bore_index]>2*self.h_min and np.max(h_)<h_max and self.x[np.argmax(h_)]<2 and t>max(t_start,self.coll_time):
                     '''
-                    There are four conditions (I don't really count t>t_start) we want before tracking the bore. 
-                      1) not post_collision is there to make sure we never flip this flag more than once. 
+                    There are four conditions (I don't really count t>t_start) we want before tracking the bore.
+                      1) not post_collision is there to make sure we never flip this flag more than once.
                       2) h_[bore]>2*h_min checks that the currents have reach the collision point.
                       3) After collsion, the fluids jet "up" and this region is fairly noisy, we will wait until the jet starts to recede.
                          The maximum will be within the jet, we donlt want to track the bore until the current max is smaller than the previous max.
-                         h_max is updated below. 
+                         h_max is updated below.
                       4) Right after collision, the argmax of h should be near the bore, which should be somewhat near the origin. This is mainly to avoid to "snowplow" being the max.
 
                       **5) Sometimes I want to force it to start later to ignore and difficulties immediately following collision
@@ -526,6 +606,7 @@ class TurbiditySim:
                     if bore_index:
                          h_[:max(bore_index-2*window_size,0)]=np.max(h_) # Set everything "sufficiently far" behind the bore to be h_max
                          h_[min(bore_index+2*window_size,self.N):]=self.h_min # Set everythign "sufficiently far" ahead of the bore to be h_min
+                    breakpoint()
                     bore_index = np.argwhere(h_>threshold)[-1][0]
                     bore_local_search = range(max(bore_index-window_size,0),min(bore_index+window_size,self.N)+1) # Only search locally around the bore
                     u_bore = u_[bore_local_search]
@@ -601,23 +682,23 @@ class TurbiditySim:
         cR = self.cR0
         cC = get_collision_concentration()
         us = self.U_s
-    
+
         print('\n' + '*'*43 + '\n* t0  = %0.5f---initial time \n* xb0 = %0.5f---initial bore position\n* uN  = %0.5f---front velocity\n* xi  = %0.5f---center of initial current\n* V   = %0.5f---volume of right current\n* xc  = %0.5f---collision point\n* cC  = %0.5f---initial concentration\n'%(t0,xC,uN,xI,VR,xC,cC) + '*'*43 + '\n')
-    
+
         h_plus  = lambda x_N     : VR/(2*(x_N-xI)) # V here is the initial volume of the right current, NOT the dyanmic V_plus
         u_plus  = lambda x_N,x_B : uN/(x_N-xI)*(x_B-xI)
         h_minus = lambda x_N,x_B : h_plus(x_N)*(1 + (x_N-(2*xI-xC))/(x_B-xC))*hmf
         V_plus  = lambda x_N,x_B : h_plus(x_N)*(x_N-x_B)
         V_minus = lambda x_N,x_B : h_minus(x_N,x_B)*(x_B-xC)
-    
+
         dSdt  = lambda h_P,h_M,u_P,c_P,c_M         : u_P + np.sqrt((1/2)*(h_M/h_P)*(c_P*h_P*h_P-c_M*h_M*h_M)/(h_P-h_M))
         dcPdt = lambda h_P,c_P                    : -us*c_P/h_P
         dcMdt = lambda h_P,h_M,u_P,c_P,c_M,x_B,x_N : -us*c_M/h_M + (h_P*(c_M-c_P)*(u_plus(x_N,x_B)-dSdt(h_P,h_M,u_P,c_P,c_M)))/V_minus(x_N,x_B)
-    
+
         def f_rhs(X):
             xb, xn, cm, cp = X
-        
-            hP_ = h_plus(xn) 
+
+            hP_ = h_plus(xn)
             uP_ = u_plus(xn,xb)
             dcP = dcPdt(hP_,cp)
             if np.abs(xb-xC)>tol:
@@ -639,7 +720,7 @@ class TurbiditySim:
                 dcM  = us*cC/(1-zeta)*(zeta/hP_-1/hM_)
                 print('\nh_minus(0) = %0.6f\nub(0)  = %0.6f\ndcM(0) = %0.6f'%(hM_,ub,dcM))
             return np.array([ub,uN,dcM,dcP])
-    
+
         t,xb,xn,cm,cp = t0,xC,2*xI-xC,cC,cC
         X = np.array([xb,xn,cm,cp])
         T, xB, xN, B_v,cM,cP = [], [], [], [],[],[]
@@ -649,31 +730,31 @@ class TurbiditySim:
             cM.append(X[2])
             cP.append(X[3])
             T.append(t)
-    
+
             k1 = f_rhs(X)
             k2 = f_rhs(X+dt/2*k1)
             k3 = f_rhs(X+dt/2*k2)
             k4 = f_rhs(X+dt*k3)
             U = (k1+2*k2+2*k3+k4)/6
             X += dt*U
-    
-            hP_ = h_plus(X[1]) 
+
+            hP_ = h_plus(X[1])
             uP_ = u_plus(X[1],X[0])
             hM_ = h_minus(X[1],X[0])
             hP.append(hP_)
             hM.append(hM_)
             uP.append(uP_)
-    
+
             xN.append(X[1])
             B_v.append(U[0])
-    
+
             t+=dt
-    
+
         return np.array(T),np.array(xN),np.array(xB),np.array(hP),np.array(hM),np.array(uP),np.array(cM),np.array(cP),np.array(B_v)
-         
+
     def RH_plots(self, show=True,cutoff_init=0,shape_factor=1.0):
         article_params()
-        plt.figure(figsize = [7.5,7.5]) 
+        plt.figure(figsize = [7.5,7.5])
 
         self.bore_data()
         t_num,xN,xB,hP,hM,uP,cM,cP,B_v = self.settling_RH_model(hmf=shape_factor)
@@ -703,7 +784,14 @@ class TurbiditySim:
         plt.ylabel("$\\frac{dx_b}{dt}$")
         plt.legend()
 
-        plt.subplots_adjust(left = 0.08,right = 0.99, top = 0.99, bottom = 0.07, hspace = 0.15, wspace = 0.2)
+        plt.subplots_adjust(
+            left = 0.08,
+            right = 0.99,
+            top = 0.99,
+            bottom = 0.07,
+            hspace = 0.15,
+            wspace = 0.2
+        )
 
         if show: plt.show()
 
@@ -711,25 +799,25 @@ class TurbiditySim:
         def interpolate_expand_filter_cut(T,U,sigma,n=25):
             from scipy.ndimage import gaussian_filter1d
             dt = T[1]-T[0]
-        
+
             tb, ub = T[:n], U[:n]
             te, ue = T[-4*n:], U[-4*n:]
             Pb, Pe = np.polyfit(tb,ub,2), np.polyfit(te,ue,1)
-        
+
             Tb = np.flip(np.array([T[0]  - (i+1)*dt for i in range(n)]))
             Te = np.array([T[-1] + (i+1)*dt for i in range(n)])
             Ub = Pb[0]*Tb**2 + Pb[1]*Tb + Pb[2]
             Ue = Pe[0]*Te + Pe[1]
-        
+
             T_expand, U_expand  = np.hstack((Tb,T,Te)), np.hstack((Ub,U,Ue))
             U_filter = gaussian_filter1d(U_expand,sigma = sigma,mode = 'nearest')
-        
+
             return U_filter[n:-n]
         '''
         This function computes the velocity at the nodes given the poistion.
         The interior points use centered differences, the endpoints use one-sided differences.
         This takes into account the grid not bein equidistant
-        ''' 
+        '''
         #dt = self.t_post[1]-self.t_post[0]
         dt0 = self.t_post[1:-1]-self.t_post[:-2]
         dt1 = self.t_post[2:]-self.t_post[1:-1]
@@ -768,7 +856,7 @@ class TurbiditySim:
         plt.plot([0, front_pos],2*[0],color = 'k',linestyle = 'dashed',linewidth = 2)
         plt.plot([bore_pos, front_pos],2*[hp],color = 'k',linestyle = 'dashed',linewidth = 2)
         plt.plot([front_pos]*2,[0, hp],color = 'k',linestyle = 'dashed',linewidth = 2)
-     
+
     def height_box_model(self,desired_time,shape_factor=1.0,mp4=False,SWE_LC = None):
         t_num,xN,xB,hP,hM,uP,cM,cP,B_vel = self.settling_RH_model(hmf=shape_factor)
         idx = np.argmin(np.abs(t_num - (desired_time-self.coll_time)))
@@ -797,7 +885,6 @@ class TurbiditySim:
         up = self.uP_data[idx]
         um = self.uM_data[idx]
         x_upper_bound = np.ceil(1.05*front_pos)
-        breakpoint()
 
         article_params()
         plt.figure(figsize=[5.125,4])
@@ -806,14 +893,43 @@ class TurbiditySim:
         plt.subplot(311)
         # self.plot_time('h', time, xlim=[0,x_upper_bound])
         self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
-        AP = dict(facecolor='black',width = 1, headwidth = 6,headlength=8) #Arrow properties for annotation
+        AP = dict(facecolor='black',width = 0.1, headwidth = 4,headlength=6) #Arrow properties for annotation
         yb_min = plt.gca().get_ylim()[0] # yb is y bounds, so I want the y bound minimum
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
-        plt.annotate('$h_-$',xy=(bore_pos+0.02*x_upper_bound,hm), xytext=(bore_pos + 0.15*x_upper_bound,hm),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
-        plt.annotate('$h_+$',xy=(bore_pos-0.02*x_upper_bound,hp), xytext=(bore_pos - 0.15*x_upper_bound,hp),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
-        plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
-        plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
+        plt.annotate(
+            '$h_-$',
+            xy=(bore_pos+0.02*x_upper_bound,hm),
+            xytext=(bore_pos + 0.21*x_upper_bound,hm),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$h_+$',
+            xy=(bore_pos-0.02*x_upper_bound,hp),
+            xytext=(bore_pos - 0.21*x_upper_bound,hp),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        # plt.annotate(
+        #     '$x_b$',
+        #     xy=(bore_pos, yb_min),
+        #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        #     horizontalalignment='center',
+        #     verticalalignment = 'top',
+        #     arrowprops=AP
+        # )
+        # plt.annotate(
+        #     '$x_N$',
+        #     xy=(front_pos,yb_min),
+        #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        #     horizontalalignment='center',
+        #     verticalalignment = 'top',
+        #     arrowprops=AP
+        # )
         plt.gca().set_xticks([0,5,10])
+        panel_label(plt.gca())
 
         # Plot 2, velocity plot with u+,u-,xN,xB labeled
         plt.subplot(312)
@@ -822,33 +938,122 @@ class TurbiditySim:
         plt.xlabel('$x$')
         yb_min = plt.gca().get_ylim()[0]
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
-        plt.annotate('$u_+$',xy=(bore_pos+0.02*x_upper_bound,up), xytext=(bore_pos + 0.15*x_upper_bound,up),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
-        plt.annotate('$u_-$',xy=(bore_pos-0.02*x_upper_bound,um), xytext=(bore_pos - 0.15*x_upper_bound,um),      horizontalalignment='center', verticalalignment = 'center', arrowprops=AP)
-        plt.annotate('$x_b$',xy=(bore_pos, yb_min),               xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
-        plt.annotate('$x_N$',xy=(front_pos,yb_min),               xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top',    arrowprops=AP)
+        plt.annotate(
+            '$u_+$',
+            xy=(bore_pos+0.02*x_upper_bound,up),
+            xytext=(bore_pos + 0.21*x_upper_bound,up),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$u_-$',
+            xy=(bore_pos-0.02*x_upper_bound,um),
+            xytext=(bore_pos - 0.21*x_upper_bound,um),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        # plt.annotate(
+        #     '$x_b$',
+        #     xy=(bore_pos, yb_min),
+        #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        #     horizontalalignment='center',
+        #     verticalalignment = 'top',
+        #     arrowprops=AP
+        # )
+        # plt.annotate(
+        #     '$x_N$',
+        #     xy=(front_pos,yb_min),
+        #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        #     horizontalalignment='center',
+        #     verticalalignment = 'top',
+        #     arrowprops=AP
+        # )
         plt.gca().set_xticks([0,5,10])
+        panel_label(plt.gca())
 
         # Plot 3, schematic for box model with "ghost" box drawn
         plt.subplot(313)
         self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
         yb_min = plt.gca().get_ylim()[0]
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
-        plt.annotate('$x_b$',xy=(bore_pos, yb_min), xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
-        plt.annotate('$x_N$',xy=(front_pos,yb_min), xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
-        plt.annotate('$2X_i-x_N$',xy=(self.apart-front_pos,yb_min), xytext=(self.apart-front_pos,yb_min-0.25*(yb_max-yb_min)), horizontalalignment='center', verticalalignment = 'top', arrowprops=AP)
-        L1,L2 = self.get_oneSided_boxModel_vertices(time,self.t_post,self.front_data,self.bore,self.hP_data_avg if h_pm == 'avg' else self.hP_data,self.hM_data_avg if h_pm == 'avg' else self.hM_data)
+        plt.annotate(
+            '$x_b$',
+            xy=(bore_pos, yb_min),
+            xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$x_N$',
+            xy=(front_pos,yb_min),
+            xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$2X_i-x_N$',
+            xy=(self.apart-front_pos,yb_min),
+            xytext=(self.apart-front_pos,yb_min-0.25*(yb_max-yb_min)),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        L1,L2 = self.get_oneSided_boxModel_vertices(
+            time,
+            self.t_post,
+            self.front_data,
+            self.bore,
+            self.hP_data_avg if h_pm == 'avg' else self.hP_data,
+            self.hM_data_avg if h_pm == 'avg' else self.hM_data
+        )
         plt.plot(L1[0],L1[1],linestyle='dashed',linewidth=2,color='k')
         plt.plot(L2[0],L2[1],linestyle='dashed',linewidth=2,color='k')
         plt.plot([self.coll_loc]*2,[0,hm],linestyle = 'dashed',linewidth=1,color='k')
-        plt.plot([self.coll_loc,self.apart-front_pos,self.apart-front_pos,bore_pos],[0,0,hp,hp],linestyle = 'dashed',linewidth=1,color='k')
+        plt.plot(
+            [self.coll_loc,self.apart-front_pos,self.apart-front_pos,bore_pos],
+            [0,0,hp,hp],
+            linestyle = 'dashed',
+            linewidth=1,
+            color='k'
+        )
         yRad = 0.75*(hm-hp)
         window_ratio = plt.gca().get_window_extent().height/plt.gca().get_window_extent().width # ratio of the axis window for the y axis to the x axis
         data_ratio = plt.gca().get_data_ratio() # ratio of the data range for the y axis to the x axis. 
         xRad = yRad*window_ratio/data_ratio
         ghost_box_color = 'tab:red'
-        plt.gca().add_patch(Rectangle((self.apart-front_pos,0),front_pos-self.apart,hp,alpha=0.7,color=ghost_box_color))
-        plt.gca().add_patch(Rectangle((self.coll_loc,hp),bore_pos-self.coll_loc,hm-hp,alpha=0.7,color=ghost_box_color))
-        plt.gca().add_patch(FancyArrowPatch((self.coll_loc-xRad,hp), (self.coll_loc,hp+yRad),connectionstyle="arc3,rad=-0.55",arrowstyle="simple,head_width=6,head_length=8",linewidth=2,color=ghost_box_color))
+        plt.gca().add_patch(
+            Rectangle(
+                (self.apart-front_pos,0),
+                front_pos-self.apart,
+                hp,
+                alpha=0.7,
+                color=ghost_box_color
+            )
+        )
+        plt.gca().add_patch(
+            Rectangle(
+                (self.coll_loc,hp),
+                bore_pos-self.coll_loc,
+                hm-hp,
+                alpha=0.7,
+                color=ghost_box_color
+            )
+        )
+        plt.gca().add_patch(
+            FancyArrowPatch(
+                (self.coll_loc-xRad,hp),
+                (self.coll_loc,hp+yRad),
+                connectionstyle="arc3,rad=-0.55",
+                arrowstyle="simple,head_width=6,head_length=8",
+                linewidth=2,
+                color=ghost_box_color
+            )
+        )
+        panel_label(plt.gca())
 
         # plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45)
         plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.0)
@@ -857,7 +1062,6 @@ class TurbiditySim:
         else:
             plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.png',dpi = 1200)
             plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.pdf')
-
     def num_val_schematic(self,time,show=True):
         self.bore_data()
         idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
@@ -874,45 +1078,127 @@ class TurbiditySim:
         x_lower_bound = -max(x_u,np.abs(x_l))
 
         article_params()
-        plt.figure(figsize=[6.5,1.3])
+        plt.figure(figsize=[5.125,2.25])
 
-        plt.subplot(131)
-        #self.plot_height_conc_time(0,xlim=[-5,5],cb=False)
-        self.plot_time('h', 0, xlim=[-5,5])
-        y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
-        x_width = plt.gca().get_xlim()[1]-plt.gca().get_xlim()[0]
-        plt.annotate('$h_r$',xy=(self.apart/2,self.hR0),xytext=(self.apart/2 - 0.2*x_width,self.hR0), horizontalalignment='right',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        #plt.annotate('$c_r$',xy=(self.apart/2,0.4*self.hR0),xytext=(self.apart/2 + 0.4*x_upper_bound,0.4*self.hR0), horizontalalignment='left',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.text(plt.gca().get_xlim()[0]+0.05*x_width,plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%0)
-        plt.gca().set_xticks([-5,0,5])
+        #plt.subplot(131)
+        ##self.plot_height_conc_time(0,xlim=[-5,5],cb=False)
+        #self.plot_time('h', 0, xlim=[-5,5])
+        #y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
+        #x_width = plt.gca().get_xlim()[1]-plt.gca().get_xlim()[0]
+        #plt.annotate(
+        #    '$h_r$',
+        #    xy=(self.apart/2,self.hR0),
+        #    xytext=(self.apart/2 - 0.2*x_width,self.hR0),
+        #    horizontalalignment='right',
+        #    verticalalignment = 'center',
+        #    arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8)
+        #)
+        ##plt.annotate('$c_r$',xy=(self.apart/2,0.4*self.hR0),xytext=(self.apart/2 + 0.4*x_upper_bound,0.4*self.hR0), horizontalalignment='left',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        #plt.text(plt.gca().get_xlim()[0]+0.05*x_width,plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%0)
+        #plt.gca().set_xticks([-5,0,5])
 
-        plt.subplot(132)
+        AP = dict(facecolor='black',width = 0.1, headwidth = 4,headlength=6)
+        plt.subplot(2,1,1)
         #self.plot_height_conc_time(time,xlim=[x_lower_bound,x_upper_bound],cb=False)
         self.plot_time('h', time, xlim=[x_lower_bound,x_upper_bound])
+        plt.xlabel('')
+        plt.ylabel(variable_dict['h' + '_latex'])
 
         x_width = plt.gca().get_xlim()[1]-plt.gca().get_xlim()[0]
         y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
-        plt.annotate('$h_-$',xy=(bore_pos+0.01*x_width,hm),xytext=(bore_pos + 0.3*x_width,hm), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$h_+$',xy=(bore_pos+0.01*x_width,hp),xytext=(bore_pos + 0.3*x_width,hp+0.0), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$x_b$',xy=(bore_pos, hp-0.05*y_height),xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$x_N$',xy=(front_pos,plt.gca().get_ylim()[0]),xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.text(x_lower_bound+0.05*(x_upper_bound-x_lower_bound),plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%time)
+        plt.annotate(
+            '$h_-$',
+            xy=(bore_pos+0.01*x_width,hm),
+            xytext=(bore_pos + 0.08*x_width,hm),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$h_+$',
+            xy=(bore_pos-0.01*x_width,hp),
+            xytext=(bore_pos - 0.08*x_width,hp+0.0),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$x_b$',
+            xy=(bore_pos, hp-0.05*y_height),
+            xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*y_height),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$x_N$',
+            xy=(front_pos,plt.gca().get_ylim()[0]),
+            xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*y_height),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        panel_label(plt.gca())
+        # plt.text(
+        #     x_lower_bound+0.05*(x_upper_bound-x_lower_bound),
+        #     plt.gca().get_ylim()[0] + 0.8*y_height,
+        #     '$t$=%i'%time
+        # )
         #plt.gca().set_xticks([-10,0,10])
         plt.gca().set_xticks([-12,-6,0,6,12])
+        plt.gca().set_xticklabels(['']*0)
 
-        plt.subplot(133)
+        plt.subplot(2,1,2)
         self.plot_time('u', time, xlim=[x_lower_bound,x_upper_bound])
+        plt.ylabel(variable_dict['u' + '_latex'])
         plt.xlabel('$x$')
-        plt.annotate('$u_+$',xy=(bore_pos+0.02*x_upper_bound,up),xytext=(bore_pos + 0.4*x_upper_bound,up), horizontalalignment='center', verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.annotate('$u_-$',xy=(bore_pos-0.02*x_upper_bound,um),xytext=(bore_pos - 0.4*x_upper_bound,um), horizontalalignment='center',verticalalignment = 'center',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate(
+            '$u_+$',
+            xy=(bore_pos+0.01*x_width,up),
+            xytext=(bore_pos + 0.08*x_width,up),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$u_-$',
+            xy=(bore_pos-0.01*x_width,um),
+            xytext=(bore_pos - 0.08*x_width,um),
+            horizontalalignment='center',
+            verticalalignment = 'center',
+            arrowprops=AP
+        )
+        vel_bound = np.max(np.abs(plt.gca().get_ylim()))
+        plt.ylim([-vel_bound,vel_bound])
         y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
-        plt.annotate('$x_b$',xy=(bore_pos,up-0.05*y_height),xytext=(bore_pos,up-0.35*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
-        plt.text(x_lower_bound+0.05*(x_upper_bound-x_lower_bound),plt.gca().get_ylim()[0] + 0.8*y_height,'$t$=%i'%time)
+        plt.annotate(
+            '$x_b$',
+            xy=(bore_pos,up-0.05*y_height),
+            xytext=(bore_pos,up-0.35*y_height),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        # plt.text(
+        #     x_lower_bound+0.05*(x_upper_bound-x_lower_bound),
+        #     plt.gca().get_ylim()[0] + 0.8*y_height,
+        #     '$t$=%i'%time
+        # )
         #plt.gca().set_xticks([-10,0,10])
         plt.gca().set_xticks([-12,-6,0,6,12])
-        plt.annotate('$x_N$',xy=(front_pos,up-0.05*y_height),xytext=(front_pos,up-0.35*y_height), horizontalalignment='center',verticalalignment = 'top',arrowprops=dict(facecolor='black',width = 1, headwidth = 6,headlength=8))
+        plt.annotate(
+            '$x_N$',
+            xy=(front_pos,0-0.05*y_height),
+            xytext=(front_pos,plt.gca().get_ylim()[0]-0.15*y_height),
+            # xy=(front_pos,up-0.05*y_height),
+            # xytext=(front_pos,up-0.35*y_height),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        panel_label(plt.gca())
 
-        plt.subplots_adjust(left = 0.07,right = 0.99, bottom = 0.3, top = 0.96,wspace = 0.26)
+        plt.subplots_adjust(left = 0.11,right = 0.99, bottom = 0.2, top = 0.96,hspace = 0.26)
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.png',dpi = 1200)
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.pdf')
         if show: plt.show()
@@ -921,27 +1207,29 @@ class TurbiditySim:
         from parmat import cm_data
         from matplotlib.colors import LinearSegmentedColormap
         cmap = LinearSegmentedColormap.from_list('mypar', cm_data, N=256)
-    
+
         article_params()
-        plt.figure(figsize=[3.5,2.75])
+        plt.figure(figsize=[2.5,2])
         x_min_idx = np.argmin(np.abs(self.x-xlim[0])) if xlim[0] else 0
         x_max_idx = np.argmin(np.abs(self.x-xlim[1])) if xlim[1] else self.N
         t_idx     = np.argmin(np.abs(self.T-tmax))    if tmax    else len(self.T)
-        fig = plt.pcolormesh(self.x[x_min_idx:x_max_idx],self.T[:t_idx],self.h[:t_idx,x_min_idx:x_max_idx],shading = 'gouraud',cmap=cmap)
+        fig = plt.pcolormesh(self.x[x_min_idx:x_max_idx],self.T[:t_idx],self.h[:t_idx,x_min_idx:x_max_idx],shading = 'gouraud',cmap=cmap,rasterized=True)
         plt.colorbar(fig)
         plt.xlabel('$x$')
         plt.ylabel('$t$')
 
-        plt.subplots_adjust(left = 0.11,right = 1, top = 0.97, bottom = 0.15)
-        plt.savefig(self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName + '.png',dpi = 1200)
-        plt.savefig(self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName + '.pdf')
+        plt.subplots_adjust(left = 0.14,right = 0.99, top = 0.97, bottom = 0.19)
+        fullFileName = self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName
+        plt.savefig(fullFileName + '.png',dpi = 1200)
+        plt.savefig(fullFileName + '_tmp' + '.pdf',dpi = 1200)
+        os.replace(fullFileName + '_tmp' + '.pdf',fullFileName + '.pdf')
         if show: plt.show()
 
     def front_vel(self):
         vel = np.max(self.u[:,np.argwhere(self.x>0)],1)
         self.uN = np.average(vel[self.T>self.coll_time])
         return vel
-        
+
     def front_vel_plot(self, show=True):
         plt.figure(figsize=[3.5,2])
         article_params()
@@ -950,11 +1238,11 @@ class TurbiditySim:
         plt.axvspan(self.coll_time,self.T[-1],color = 'gray', alpha = 0.3)
         plt.plot(self.T[self.T>self.coll_time], self.T[self.T>self.coll_time]*0+self.uN, linestyle = 'dashed',color='k')
         plt.text(3*self.coll_time, 0.98*self.uN, '$u_N\\approx%0.2f$'%self.uN, verticalalignment='top', horizontalalignment='left')
-    
+
         plt.xlabel('time, $t$')
         plt.ylabel('nose velocity, $\\frac{dx_N}{dt}$')
         plt.text((self.T[-1]+self.T[0])/2, (vel[-1]+vel[0])/2, 'post collision', verticalalignment='center', horizontalalignment='center')
-    
+
         plt.xlim([None,self.T[-1]])
         plt.subplots_adjust(left = 0.16,bottom = 0.22, top = 0.98, right = 0.98)
         plt.savefig(self.rootFile + 'solutions/plots/' + 'FrontVel_' + self.fileName + '.png',dpi = 1200)
@@ -967,7 +1255,7 @@ class TurbiditySim:
         low_idx,high_idx = np.argmax(C),np.argmin(C)
         C_local = C[low_idx:high_idx]
         x_local = self.x[low_idx:high_idx]
-    
+
         return intersection(x_local,C_local,x_local*0)
     def equal_conc_pos_vs_time(self,start_time,label=None):
         times = self.T[self.T>=start_time]
@@ -990,7 +1278,7 @@ class TurbiditySim:
         plt.ylabel('concentration')
 
 def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],SimPack=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=200,finalTime=40.,save=True):
-    
+
     if SimPack == None:
         Sims = []
         NoCollSims = []
@@ -998,7 +1286,7 @@ def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.0
         for sim in SimVars:
             Sims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d1','d2'], sharp=sharp, N=N, finalTime=finalTime))
             NoCollSims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d2'], subFile='sims/OneCurrOnly_', sharp=sharp, N=N, finalTime=finalTime))
-    else: 
+    else:
         Sims,NoCollSims,LeftCurr = SimPack
     LeftCurr_d1 = np.flip(LeftCurr.d2[-1,:])
 
@@ -1073,7 +1361,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
 def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.,shape_factor=1.,dt=0.01):
     '''
     This function plots the position and the velocity of the bore
-    for both the Box Model and Shallow Water Model. 
+    for both the Box Model and Shallow Water Model.
     Here, settling is nonzero, but the currents are symmetric,
     in Box_SWE_Asym(), the settling is 0, but the currents are asymmetric.
     '''
@@ -1083,7 +1371,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         Sims = []
         for us in U_s:
             Sims.append(TurbiditySim(1.0,1.0,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
-    
+
     plt.figure(figsize=[5.125,3.])
     legend_list = ['SWE','Box Model','']
     legend_colors = ['k']*2 + ['white']
@@ -1098,7 +1386,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         plt.ylim([0,None])
         plt.xlim([0,None])
-        
+
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
         plt.plot(t_num,xB,color=tabcolors[i],linestyle = mpllinestyles[1])
@@ -1130,7 +1418,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.plot(t_num,cP,color=tabcolors[i],linestyle = mpllinestyles[1])
         plt.xlabel('time, $t$')
         plt.ylabel('concentration')
-        
+
         legend_list.append('$U_s=$%0.2f'%(sim.U_s))
 
     legend_colors += list(tabcolors[:len(Sims)])
@@ -1158,7 +1446,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
 def suspended_concentration(US, RootFile):
     def print_latex_line(label,l):
         string = label
-        for i in l: 
+        for i in l:
             string += ' & %0.3f'%i
         string += ' \\\\'
         print(string)
@@ -1167,7 +1455,7 @@ def suspended_concentration(US, RootFile):
     for i,us in enumerate(US):
          t1 = TurbiditySim(0.0,0.0,us,RootFile,['c1','c2'],N=20000,sharp = 200)
          no_coll_time.append(t1.sus_conc(LS = 'dashed', LC = tabcolors[i]))
-         
+
          t2 = TurbiditySim(1.0,1.0,us,RootFile,['c1','c2'],N=20000,sharp = 200)
          coll_time.append(t2.sus_conc(LS = 'solid',LC = tabcolors[i]))
     plt.plot(t1.T,t1.T*0+0.05,color = 'k', linewidth = 1)
@@ -1201,7 +1489,7 @@ def deposit_example_plots(US = [0.005,0.01,0.015]):
                 tt.plot_deposit(LS = mpllinestyles[i])
 
         plt.subplot(1,3,2)
-        legendlist = ['$U_s = %0.3f$'%us for us in US] + ['$d_1(x)$','$d_2(x)$'] 
+        legendlist = ['$U_s = %0.3f$'%us for us in US] + ['$d_1(x)$','$d_2(x)$']
         colors = ['k' for i in range(len(US))] + list(tabcolors[:2])
         leg = plt.legend(legendlist,ncol=len(legendlist),loc='upper center', bbox_to_anchor=(0.5, -0.23))
         linestyles = list(mpllinestyles[:3]) + ['solid' for i in range(2)]
@@ -1289,14 +1577,14 @@ class DepositionAnalysis:
         self.apart = apart
         self.FrSquared = FrSquared
         self.hL0, self.cL0 = hL0, cL0
-        
+
         self.fileName = "%iby%i_%iapart_N%i_CFL%0.3f_T%0.1f_NuRe%i_FrFr%0.3f_Us%0.3f_hmin%0.5f_sharp%i"%(self.H2.shape[0],self.C2.shape[0],self.apart,self.N,self.CFL,self.finalTime,self.NuRe,self.FrSquared,self.U_s,self.h_min,self.sharp)
 
-        try: 
+        try:
             self.encroachment_mass = np.loadtxt(self.rootFile + self.subFile + 'encroachMass_' + self.fileName + '.csv', delimiter = ',')
             self.COM_x = np.loadtxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', delimiter = ',')
         except OSError:
-            print('Cannot find processed sedimentation data. Post processing now.') 
+            print('Cannot find processed sedimentation data. Post processing now.')
             start = time.time()
             self.encroachment_mass = np.zeros([C2.shape[0],H2.shape[0]])
             self.COM_x = np.zeros([C2.shape[0],H2.shape[0]])
@@ -1412,27 +1700,27 @@ class DepositionAnalysis:
             plt.close()
         else:
             plt.show()
-    
+
     def plotly3Dplot(self, azim=-80, elev=22):
         X = self.H_mesh
         Y = self.C_mesh
         Z = self.encroachment_mass
         P = self.linear_appr(X, Y, Z)
-    
+
         # Mask NaNs
         Zm = np.ma.masked_invalid(Z)
         Pm = np.ma.masked_invalid(P)
-    
+
         # Convert azim/elev → Plotly camera
         r = 1.4
         az,el = np.deg2rad(azim),np.deg2rad(elev)
         camera = dict(eye=dict(x=r*np.cos(el)*np.cos(az), y=r*np.cos(el)*np.sin(az), z=r*np.sin(el)))
-    
+
         fig = go.Figure()
-    
+
         # Surface 1: linear approximation
         fig.add_trace(go.Surface(x=X,y=Y,z=Pm,colorscale="Plasma",showscale=False,opacity=1.0))
-    
+
         # Surface 2: encroachment mass
         fig.add_trace(
             go.Surface(
@@ -1447,7 +1735,7 @@ class DepositionAnalysis:
                 )
             )
         )
-    
+
         fig.update_layout(
             width=1040,   # ~2.6 in at 400 dpi
             height=840,   # ~2.1 in at 400 dpi
@@ -1487,20 +1775,23 @@ class DepositionAnalysis:
             ),
             paper_bgcolor="white"
         )
-    
+
         #fig.show()
         #plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', bbox_inches='tight',dpi=800)
         fig.write_image(self.rootFile + 'solutions/plots/3Dview_' + self.fileName +'.png')
-        
+
     def my3Dplot(self):
 
         encroachment_linear = self.linear_appr(self.H_mesh,self.C_mesh,self.encroachment_mass)
         encroachment_quadratic = self.quadratic_appr(self.H_mesh,self.C_mesh,self.encroachment_mass)
 
-        fig = make_subplots(rows=1, cols=2, 
-            specs=[[{'type':'surface'}]*2], 
+        fig = make_subplots(
+            rows=1,
+            cols=2,
+            specs=[[{'type':'surface'}]*2],
             subplot_titles=(r'$\text{Encroachment Mass}$', r'$\text{COM }x\text{-coordinate}$'),
-            horizontal_spacing=0.15)
+            horizontal_spacing=0.15
+        )
 
         fig.add_trace(go.Surface(z=self.encroachment_mass, x=self.H_mesh, y=self.C_mesh, colorscale='viridis',colorbar={'x':0.43,'title':'data'}), row=1, col=1)
         fig.add_trace(go.Surface(z=encroachment_linear, x=self.H_mesh, y=self.C_mesh, colorscale='Plotly3', colorbar={'x':0.51, 'title':'Linear approximation'}), row=1, col=1)
@@ -1518,7 +1809,7 @@ class DepositionAnalysis:
 
     def get_no_encroachment_data(self):
         '''
-        Find the (h0,c0) values where encroachment_mass = 0. 
+        Find the (h0,c0) values where encroachment_mass = 0.
         That is, find the 0 level-set of encroachment_mass.
         This is meant to identify an (h0,c0) pair where no encroachment occurs, so I stored this as a dictionary, like a look up table.
         '''
@@ -1531,8 +1822,8 @@ class DepositionAnalysis:
 
 def make_deposition_plots(US=[0.005,0.01,0.015]):
     '''
-    This function runs creates plot when you want to plot multiple surface for differnt settling speeds at once. 
-    The DepositionAnalysis class has to be called for each settling speed to generate the data. 
+    This function runs creates plot when you want to plot multiple surface for differnt settling speeds at once.
+    The DepositionAnalysis class has to be called for each settling speed to generate the data.
     '''
     def singleSettlingSpeeds():
         for u in US:
@@ -1541,21 +1832,21 @@ def make_deposition_plots(US=[0.005,0.01,0.015]):
             d.plot_dimensional_analysis()
 
     def layeredSettlingSpeeds():
-        fig = make_subplots(rows=1, cols=2, 
-            specs=[[{'type':'surface'}]*2], 
+        fig = make_subplots(rows=1, cols=2,
+            specs=[[{'type':'surface'}]*2],
             subplot_titles=(r'$\text{Encroachment Mass}$', r'$\text{COM }x\text{-coordinate}$'))
-  
+
         settlingSpeedCM = ['Blugrn','Plotly3','Burg']
-         
+
         for i,u in enumerate(US):
             d = DepositionAnalysis(u,'SedimentationInitialConditionTest_2025Jun7/')
-             
 
-            fig.add_trace(go.Surface(z=d.encroachment_mass, x=d.H_mesh, y=d.C_mesh, 
+
+            fig.add_trace(go.Surface(z=d.encroachment_mass, x=d.H_mesh, y=d.C_mesh,
                 colorscale=settlingSpeedCM[i],
-                colorbar={'x':0.29+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}), 
+                colorbar={'x':0.29+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}),
                 row=1, col=1)
-            fig.add_trace(go.Surface(z=d.COM_x, x=d.H_mesh, y=d.C_mesh, 
+            fig.add_trace(go.Surface(z=d.COM_x, x=d.H_mesh, y=d.C_mesh,
                 colorscale=settlingSpeedCM[i],
                 colorbar={'x':0.79+0.07*i,'title':{'text':'$U_s=%0.3f$'%(u),'side':'top'},'len':0.75,'thickness':20}), 
                 row=1, col=2)
@@ -1593,7 +1884,7 @@ def collision_details(u_s,rootFile,N=5000,sharp=50):
                 X[i,j] = np.nan
                 T[i,j] = np.nan
     plt.figure(figsize = [12,5])
-    
+
     plt.rcParams.update({"text.usetex":True})
     figure_title = ['Collision $x$-location','Collision time']
     for i,A in enumerate([X,T]):
@@ -1623,7 +1914,7 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
             x = x[idx]
             y = y[idx]
 
-            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par) 
+            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par)
             plt.plot(x,y,label = str_label)
         plt.xlabel('$x$')
         plt.ylabel(variable_y_label)
@@ -1653,7 +1944,7 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         par_list = [250,500,1000,2000]
         par_matrix = np.zeros((5,len(par_list)+1))
         x_min_bore = 1000000
-        x_max_bore = 0 
+        x_max_bore = 0
         H_plot = []
         U_plot = []
         X_plot = []
@@ -1676,7 +1967,7 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         for j in range(par_matrix.shape[0]):
             par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table('\\Rey', par_list, par_matrix)
-        return par_matrix 
+        return par_matrix
 
     def NumericalValidation_CFL(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
         par_list = [0.4,0.2,0.1,0.05]
@@ -1705,12 +1996,12 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         for j in range(par_matrix.shape[0]):
             par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table('\\Lambda', par_list, par_matrix)
-        return par_matrix 
+        return par_matrix
     def NumericalValidation_Sharp(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
         par_list = [50,100,200,400]
         par_matrix = np.zeros((5,len(par_list)+1))
         x_min_bore = 1000000
-        x_max_bore = 0 
+        x_max_bore = 0
         H_plot = []
         U_plot = []
         X_plot = []
@@ -1733,13 +2024,13 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         for j in range(par_matrix.shape[0]):
             par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table('\\sigma', par_list, par_matrix)
-        return par_matrix 
+        return par_matrix
 
     def NumericalValidation_hmin(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
         par_list = [0.0004,0.0002,0.0001,0.00005]
         par_matrix = np.zeros((5,len(par_list)+1))
         x_min_bore = 1000000
-        x_max_bore = 0 
+        x_max_bore = 0
         H_plot = []
         U_plot = []
         X_plot = []
@@ -1762,13 +2053,13 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         for j in range(par_matrix.shape[0]):
             par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table('\\hmin', par_list, par_matrix)
-        return par_matrix 
+        return par_matrix
 
     def NumericalValidation_N(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
         par_list = [5000,10000,20000,40000]
         par_matrix = np.zeros((5,len(par_list)+1))
         x_min_bore = 1000000
-        x_max_bore = 0 
+        x_max_bore = 0
         H_plot = []
         U_plot = []
         X_plot = []
@@ -1791,7 +2082,7 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
         for j in range(par_matrix.shape[0]):
             par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table('\\Delta x', [100/N for N in [5000, 10000, 20000, 40000]], par_matrix)
-        return par_matrix 
+        return par_matrix
     NumericalValidation_N()
     NumericalValidation_hmin()
     NumericalValidation_NuRe()
@@ -1800,19 +2091,48 @@ def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=
 
 def article_plots(Figs=list(range(1,12))):
     article_params()
-    if 8 in Figs:
-        MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
+    if 1 in Figs:
+        Fig1Sims = []
+        for test in ((1.0,1.0),(0.7,0.7)):
+            Fig1Sims.append(
+                TurbiditySim(
+                    *test,
+                    0.0,
+                    'Apr22_FinalResults/',
+                    ['h','u','c1','c2','d1','d2'],
+                    N=12000,
+                    finalTime=12,
+                    sharp=200
+                )
+            )
+    # if 8 in Figs:
+    #     MainSim = TurbiditySim(1.0,1.0,0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'],sharp = 100,N=7000)
+    if 7 in Figs or 8 in Figs or 2 in Figs:
+        Fig2_7_8Sims = []
+        for test in ((1.0,1.0),(0.7,0.7)):
+            Fig2_7_8Sims.append(
+                TurbiditySim(
+                    *test,
+                    0.0,
+                    'Apr22_FinalResults/',
+                    ['h','u','c1','c2'],
+                    N=6000,
+                    finalTime=6,
+                    sharp=200
+                )
+            )
     if 6 in Figs:
         MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
     if 1 in Figs:
-        pass
         # Figure 1,  Results - solution profile
+        for sim in Fig1Sims:
+            sim.plot_profile_results(['h','u','c1','c2'])
         # Make it look not dumb
         # needs to go somewhere else, but not sure where
         # Make a matching MP4 to go with supplemental materials 
     if 2 in Figs:
-        pass
         # Figure 2,  Example solution for numerics discussion
+        Fig2_7_8Sims[1].num_val_schematic(6,show=False)
         # Remove shading
         # Add x_i to left panel
         # Make arrows thinner
@@ -1841,12 +2161,15 @@ def article_plots(Figs=list(range(1,12))):
         # This figure has gone away,
         # but we want find a "best fit" parameter to report for planes. 
     if 7 in Figs:
-        pass
+        for sim in Fig2_7_8Sims:
+            sim.spacetime(xlim=[-5,5])
+        # hTwo0.70_cTwo0.70_5apart_N6000_CFL0.100_T6.0_NuRe1000_Us0.000_hmin0.00010_sharp200
         # Figure 7,  Results - Space time plot
         # Add test case matching figure 4
     if 8 in Figs:
         # Figure 8,  Box model - schematic
-        MainSim.box_model_schematic(6,show=False)
+        # MainSim.box_model_schematic(6,show=False)
+        Fig2_7_8Sims[0].box_model_schematic(6,show=False)
         # Remove top two panels, they are redundant with figure 1
         # Switch to be avg h-/+ for third panel
     if 9 in Figs:
