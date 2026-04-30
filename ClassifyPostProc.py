@@ -1563,6 +1563,26 @@ def encroachment_by_concentration(t=[(1.0,1.0),(1.04,0.9),(1.06,0.8),(1.11,0.7),
 
     return t
 
+def FindMissingDeposits(U_s, rootFile, H2=np.linspace(0.7,1.42,73), C2=np.linspace(0.7,1.42,73),VARS=['d1','d2'], N = 28000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 200, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'sims/'):
+    # breakpoint()
+    locals_dict = locals().copy()
+    locals_dict.pop('H2')
+    locals_dict.pop('C2')
+    L = []
+    for h2 in H2:
+        for c2 in C2:
+            if h2*c2<=1: 
+                try: 
+                    sim = TurbiditySim(h2,c2,**locals_dict)
+                    if sim.T[1] != 40:
+                        L.append((h2,c2))
+                except ValueError:
+                    L.append((h2,c2))
+
+    with open('./batch_99.txt','w') as f:
+        for params in L:
+            f.write('%0.2f %0.2f\n'%(params[0],params[1]))
+
 class DepositionAnalysis:
     # SedimentationInitialConditionTest_2025Jun7 is rootFile for full test.
     def __init__(self, U_s, rootFile, H2=np.linspace(0.7,1.42,73), C2=np.linspace(0.7,1.42,73), N = 5000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 50, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'solutions/postData/'):
@@ -1905,6 +1925,105 @@ def collision_details(u_s,rootFile,N=5000,sharp=50):
     plt.show()
     plt.rcParams.update({"text.usetex":False})
 
+def NumericalValidationScheme(
+    rootFile='NumericalValidation_2025Mar19/',
+    N=20000,
+    h_min=0.0001,
+    NuRe=1000,
+    CFL=0.1,
+    sharp=200,
+    U_s=0.0,
+    T=40.0,
+    apart = 5,
+    plot_=True,
+):
+
+    def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max):
+        plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
+        plt.figure(figsize = [6,5])
+
+        for x,y,par in zip(X,Y,par_list):
+            idx = np.where(x>x_Min)[0]
+            x = x[idx]
+            y = y[idx]
+            idx = np.where(x<x_Max)[0]
+            x = x[idx]
+            y = y[idx]
+
+            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par)
+            plt.plot(x,y,label = str_label)
+        plt.xlabel('$x$')
+        plt.ylabel(variable_y_label)
+        plt.legend()
+
+        plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
+        plt.close()
+        plt.rcParams.update({"text.usetex":False})
+
+    def print_latex_table(var,label,M):
+        print('')
+        label.append(77)
+        M = np.vstack((np.array(label),M))
+        l = ['S','u_-','u_+','h_-','h_+']
+        l.insert(0,var)
+        rows,cols = M.shape
+        for i in range(rows):
+            string_ = '        $'+l[i]+'$'
+            for j in range(cols):
+                string_ += ' & %s'%('\\%') if i==0 and j == M.shape[1]-1 else ' & %0.6f '%M[i,j]
+            string_ += '\\\\'
+            if i==0:
+                string_ += ' \\hline'
+            print(string_)
+        print('')
+
+    def NumericalVal(
+        param,
+        param_list,
+        label_table,
+        label_figure,
+    ):
+        # par_list = [250,500,1000,2000]
+        par_matrix = np.zeros((5,len(param_list)+1))
+        x_min_bore = 1000000
+        x_max_bore = 0
+        H_plot = []
+        U_plot = []
+        X_plot = []
+
+        for i,val in enumerate(param_list):
+            params = dict(N=N, h_min=h_min, NuRe=NuRe, CFL=CFL, sharp=sharp)
+            params[param] = val   # override the one we’re sweeping
+            sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u'],subFile='',FrSquared=2.828,finalTime=T,**params)
+            print(label_table,label_figure)
+            # breakpoint()
+            # sim.bore_data()
+
+            # t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200)
+            # x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
+            # x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
+
+            # for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
+            #     par_matrix[j,i] = val
+            # x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)
+            # H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)[-1]
+            # X_plot.append(x)
+            # H_plot.append(H[-1,1:])
+            # U_plot.append(U[-1,1:])
+
+        # plot_numer(X_plot,H_plot,'Reynolds','\\textrm{Re}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        # plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        # for j in range(par_matrix.shape[0]):
+            # par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        # print_latex_table('\\Rey', par_list, par_matrix)
+        # # return par_matrix
+    NumericalVal('NuRe',[250,500,1000,2000],'\\Rey','\\textrm{Re}')
+    NumericalVal('N',[5000,10000,20000,40000],'\\Delta x','\\Delta x')
+    NumericalVal('CFL',[0.4,0.2,0.1,0.05],'\\Lambda','\\Lambda')
+    NumericalVal('h_min',[0.0004,0.0002,0.0001,0.00005],'\\hmin','h_{\\textrm{min}}')
+
+
+
 def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0,T=40.0,apart = 5, FrSquared = 2.828, plot_=True):
     def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max):
         plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
@@ -2150,8 +2269,8 @@ def article_plots(Figs=list(range(1,12))):
         pass
         # Figure 4,  Numerical validation for Reynolds number
     if 5 in Figs:
-        pass
         # Figure 5,  Sediment deposition - example solutions
+        Deposit_Results()
         # Matching vertical axes
         # vertically stacked
         # Separate figures, since each one is a different run
