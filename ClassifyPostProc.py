@@ -388,7 +388,8 @@ class TurbiditySim:
         plt.plot(self.x[x_min_idx:x_max_idx],getattr(self,var)[index,x_min_idx:x_max_idx],label = '$t=%0.1f$'%self.T[index],linestyle=linestyle,color=color)
 
         plt.xlabel('$x$')
-        plt.ylabel(variable_dict[var])
+        plt.ylabel(variable_dict[var+'_latex'])
+        plt.xlim(xlim)
 
     def plot_times(self,var,times,xlim=None,wl = True,linestyle=None,color=None):
         for t in times:
@@ -601,17 +602,21 @@ class TurbiditySim:
                 front_index = np.argwhere(h_>2*self.h_min)[-1][0] # Right traveling front.
 
                 if post_collision:
-                    threshold = (h_[int((front_index+bore_index)/2)] + h_[int((self.coll_idx+bore_index)/2)])/2
-                    u_max = np.max(u_)
-                    if bore_index:
-                         h_[:max(bore_index-2*window_size,0)]=np.max(h_) # Set everything "sufficiently far" behind the bore to be h_max
-                         h_[min(bore_index+2*window_size,self.N):]=self.h_min # Set everythign "sufficiently far" ahead of the bore to be h_min
-                    breakpoint()
-                    bore_index = np.argwhere(h_>threshold)[-1][0]
+                    # threshold = (h_[int((front_index+bore_index)/2)] + h_[int((self.coll_idx+bore_index)/2)])/2
+                    # u_max = np.max(u_)
+                    # if bore_index:
+                    #      h_[:max(bore_index-2*window_size,0)]=np.max(h_) # Set everything "sufficiently far" behind the bore to be h_max
+                    #      h_[min(bore_index+2*window_size,self.N):]=self.h_min # Set everythign "sufficiently far" ahead of the bore to be h_min
+                    # breakpoint()
+                    # bore_index = np.argwhere(h_>threshold)[-1][0]
                     bore_local_search = range(max(bore_index-window_size,0),min(bore_index+window_size,self.N)+1) # Only search locally around the bore
                     u_bore = u_[bore_local_search]
                     h_bore = h_[bore_local_search]
                     x_bore = self.x[bore_local_search]
+                    threshold = (np.max(h_bore)+np.min(h_bore))/2
+                    bore_index_local = np.argwhere(h_bore>threshold).reshape(-1)[-1]
+                    bore_index = np.argmin(np.abs(self.x - x_bore[bore_index_local]))
+
                     u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore) # u_mbi is u_minus bore index, u_pbi is u_plus bore index
 
                     bore_loc = (self.x[bore_index]-self.x[bore_index+1])*(threshold-h_[bore_index+1])/(h_[bore_index]-h_[bore_index+1])+self.x[bore_index+1] # Linear approximation between nodes values for height immediately above/below threshold
@@ -884,7 +889,7 @@ class TurbiditySim:
         hm = self.hM_data_avg[idx] if h_pm == 'avg' else self.hM_data[idx]
         up = self.uP_data[idx]
         um = self.uM_data[idx]
-        x_upper_bound = np.ceil(1.05*front_pos)
+        x_upper_bound = min(self.x[-1],np.ceil(1.05*front_pos))
 
         article_params()
         plt.figure(figsize=[5.125,4])
@@ -928,7 +933,6 @@ class TurbiditySim:
         #     verticalalignment = 'top',
         #     arrowprops=AP
         # )
-        plt.gca().set_xticks([0,5,10])
         panel_label(plt.gca())
 
         # Plot 2, velocity plot with u+,u-,xN,xB labeled
@@ -970,7 +974,6 @@ class TurbiditySim:
         #     verticalalignment = 'top',
         #     arrowprops=AP
         # )
-        plt.gca().set_xticks([0,5,10])
         panel_label(plt.gca())
 
         # Plot 3, schematic for box model with "ghost" box drawn
@@ -1053,6 +1056,7 @@ class TurbiditySim:
                 color=ghost_box_color
             )
         )
+        plt.gca().set_xticks([-12,-6,0,6,12])
         panel_label(plt.gca())
 
         # plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45)
