@@ -43,17 +43,17 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "Mar3_DepositionExamplePlots/"
+#define fileprefix "Apr30_FinalNumericalValidation/"
 #define subfile "sims/"
 
-int save_q = 0; //Decide if you want to save to a file or not.
-int save_h = 0; //Decide if you want to save to a file or not.
+int save_q = 1; //Decide if you want to save to a file or not.
+int save_h = 1; //Decide if you want to save to a file or not.
 int save_phi1 = 0; //Decide if you want to save to a file or not.
 int save_phi2 = 0; //Decide if you want to save to a file or not.
-int save_deposit = 1; //Decide if you want to save to a file or not.
+int save_deposit = 0; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = 0.01; // Save timestamp this often
+double print_when = 1.; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
@@ -159,44 +159,43 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double C[4][3] = {{11./6.,-7./6.,1./3.},{1./3.,5./6.,-1./6.},{-1./6.,5./6.,1./3.},{1./3.,-7./6.,11./6.}};
     double ep = 1e-6; 
     //Need to create u_left and u_right outside of this function
-    double gamma[N][m], u_l[N][m], u_r[N][m];
-    double alpha_l[N][m], alpha_r[N][m];
-    double W_l[N][m], W_r[N][m];
+    /* double gamma[N][m], u_l[N][m], u_r[N][m]; */
+    /* double alpha_l[N][m], alpha_r[N][m]; */
+    /* double W_l[N][m], W_r[N][m]; */
+    double gamma[m], u_l[m], u_r[m];
+    double alpha_l[m], alpha_r[m];
+    double W_l[m], W_r[m];
+    double alpha_l_row_sum, alpha_r_row_sum;
     int i,r;
     for(i=0;i<N;i++){
-        gamma[i][0] = 13./12.*pow(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)],2) + 1./4.*pow(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)],2);
-        gamma[i][1] = 13./12.*pow(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)],2) + 1./4.*pow(u_[BC(i-1)] - u_[BC(i+1)],2);
-        gamma[i][2] = 13./12.*pow(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i],2) + 1./4.*pow(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i],2);
+        gamma[0] = 13./12.*pow(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)],2) + 1./4.*pow(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)],2);
+        gamma[1] = 13./12.*pow(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)],2) + 1./4.*pow(u_[BC(i-1)] - u_[BC(i+1)],2);
+        gamma[2] = 13./12.*pow(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i],2) + 1./4.*pow(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i],2);
 
         for(r=0;r<m;r++){
-            u_l[i][r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
-            u_r[i][r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
+            u_l[r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
+            u_r[r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
 
-            alpha_l[i][r] = beta[0][r]/pow(ep + gamma[i][r],2);
-            alpha_r[i][r] = beta[1][r]/pow(ep + gamma[i][r],2);
+            alpha_l[r] = beta[0][r]/pow(ep + gamma[r],2);
+            alpha_r[r] = beta[1][r]/pow(ep + gamma[r],2);
         }
-    }
 
-    double alpha_l_row_sum, alpha_r_row_sum;
-    for(i=0;i<N;i++){
         alpha_l_row_sum = 0;
         alpha_r_row_sum = 0;
         for(r=0;r<m;r++){
-            alpha_l_row_sum += alpha_l[i][r];
-            alpha_r_row_sum += alpha_r[i][r];
+            alpha_l_row_sum += alpha_l[r];
+            alpha_r_row_sum += alpha_r[r];
         }
         for(r=0;r<m;r++){
-            W_l[i][r] = alpha_l[i][r]/alpha_l_row_sum;
-            W_r[i][r] = alpha_r[i][r]/alpha_r_row_sum;
+            W_l[r] = alpha_l[r]/alpha_l_row_sum;
+            W_r[r] = alpha_r[r]/alpha_r_row_sum;
         }
-    }
    
-    for(i=0;i<N;i++){
         u_left[i] = 0;
         u_right[i] = 0;
         for(r=0;r<m;r++){
-            u_left[i] += W_l[i][r]*u_l[i][r];
-            u_right[i] += W_r[i][r]*u_r[i][r];
+            u_left[i]  += W_l[r]*u_l[r];
+            u_right[i] += W_r[r]*u_r[r];
         }
     }
 }
