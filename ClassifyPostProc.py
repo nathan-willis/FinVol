@@ -8,6 +8,7 @@ else:
 import matplotlib.animation as ani
 import matplotlib.ticker as tkr
 from matplotlib.patches import Rectangle, FancyArrowPatch
+import matplotlib.patheffects as pe
 from celluloid import Camera
 import os
 import seaborn as sns
@@ -481,9 +482,9 @@ class TurbiditySim:
         plt.title('$h_{2,0}$ = %0.2f, $c_{2,0}$ = %0.2f'%(self.hR0,self.cR0))
         plt.xlabel('$x$')
 
-    def plot_deposit_gradient(self,dt_plot=1,xb_tol=1e-5,xb=None,yb=None,show=True,save = False, close = True,cb = True,title=True):
+    def plot_deposit_gradient(self,dt_plot=1,xb_tol=1e-5,xb=None,yb=None,show=True,save = False, close = True,cb = True,title=True,subplot=False):
         article_params()
-        plt.figure(figsize=[5.125,1.2 + 0.2*int(title)])
+        if not subplot: plt.figure(figsize=[5.125,1.2 + 0.2*int(title)])
         for desired_time in np.flip(self.T[self.T%dt_plot<0.9*self.dt])[:-1]:
             print(desired_time)
             tI = np.argmin(np.abs(self.T-desired_time)) # tI for time index.
@@ -1281,7 +1282,7 @@ class TurbiditySim:
         plt.xlabel('time')
         plt.ylabel('concentration')
 
-def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],SimPack=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=200,finalTime=40.,save=True):
+def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],SimPack=None,U_s=0.01,rootFile = 'Mar3_DepositionExamplePlots/',N=28000,sharp=200,finalTime=40.,save=True,subplot=True):
 
     if SimPack == None:
         Sims = []
@@ -1300,14 +1301,26 @@ def Deposit_Results(SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.0
         yMax = max(yMax,np.max(D))
     print(yMax)
 
-    for coll,no_coll in zip(Sims,NoCollSims):
-        coll.plot_deposit_gradient(dt_plot=0.1,show=False,save=False,xb=20,yb=yMax,close=False,title=True)
-        plt.plot(no_coll.x, no_coll.d2[-1,:] + LeftCurr_d1, label = 'No Collision')
-        plt.legend()
-        plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
-        if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.png',dpi=1000)
+    if subplot:
+        plt.figure(figsize = [5.125,6])
+        for i,(coll,no_coll) in enumerate(zip(Sims,NoCollSims)):
+            plt.subplot(len(Sims),1,i+1)
+            coll.plot_deposit_gradient(dt_plot=2.,show=False,save=False,xb=20,yb=yMax,cb = False,close=False,title=False)
+            plt.plot(no_coll.x, no_coll.d2[-1,:] + LeftCurr_d1, label = 'No Collision')
+            plt.legend()
+        # plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
+        if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + '.png',dpi=1000)
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
+    else:
+        for coll,no_coll in zip(Sims,NoCollSims):
+            coll.plot_deposit_gradient(dt_plot=0.1,show=False,save=False,xb=20,yb=yMax,close=False,title=True)
+            plt.plot(no_coll.x, no_coll.d2[-1,:] + LeftCurr_d1, label = 'No Collision')
+            plt.legend()
+            plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
+            if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.png',dpi=1000)
+            #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
+            plt.close()
     return Sims,NoCollSims,LeftCurr
 
 def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
@@ -1615,23 +1628,35 @@ class DepositionAnalysis:
             self.deposited_mass = np.zeros([C2.shape[0],H2.shape[0]])
             self.coll_time = np.zeros([C2.shape[0],H2.shape[0]])
             self.coll_loc = np.zeros([C2.shape[0],H2.shape[0]])
+            self.bad_batch = []
+            self.weird_batch = []
             for i,h2 in enumerate(H2):
                 for j,c2 in enumerate(C2):
                     if h2*c2<=1:
-                        temp_sim = TurbiditySim(h2,c2,self.U_s,self.rootFile,['d1','d2'],N=self.N, NuRe=self.NuRe, finalTime=self.finalTime, h_min=self.h_min, CFL=self.CFL, sharp=self.sharp, apart=self.apart, FrSquared=self.FrSquared)
-                        if temp_sim.d1.shape[0]>1 and temp_sim.d2.shape[0]>1:
-                            temp_sim.deposition_details()
-                            self.encroachment_mass[j,i] = temp_sim.encroachment_mass
-                            self.COM_x[j,i] = temp_sim.COM_x
-                            self.deposited_mass[j,i] = (np.sum(temp_sim.d1)+np.sum(temp_sim.d2))*(temp_sim.x[1]-temp_sim.x[0])/(temp_sim.hL0*temp_sim.cL0 + h2*c2)
-                            self.coll_time[j,i] = temp_sim.coll_time
-                            self.coll_loc[j,i] = temp_sim.coll_loc
-                        else:
-                            print('h2 = %0.2f, c2 = %0.2f, U_s = %0.3f simulation did not finish. Final deposit data DNE'%(h2,c2,self.U_s))
+                        try: 
+                            temp_sim = TurbiditySim(h2,c2,self.U_s,self.rootFile,['d1','d2'],N=self.N, NuRe=self.NuRe, finalTime=self.finalTime, h_min=self.h_min, CFL=self.CFL, sharp=self.sharp, apart=self.apart, FrSquared=self.FrSquared)
+                            if temp_sim.d1.shape[0]>1 and temp_sim.d2.shape[0]>1:
+                                temp_sim.deposition_details()
+                                self.encroachment_mass[j,i] = temp_sim.encroachment_mass
+                                self.COM_x[j,i] = temp_sim.COM_x
+                                self.deposited_mass[j,i] = (np.sum(temp_sim.d1)+np.sum(temp_sim.d2))*(temp_sim.x[1]-temp_sim.x[0])/(temp_sim.hL0*temp_sim.cL0 + h2*c2)
+                                self.coll_time[j,i] = temp_sim.coll_time
+                                self.coll_loc[j,i] = temp_sim.coll_loc
+                            else:
+                                print('h2 = %0.2f, c2 = %0.2f, U_s = %0.3f simulation did not finish. Final deposit data DNE'%(h2,c2,self.U_s))
+                                self.encroachment_mass[j,i] = np.nan
+                                self.coll_time[j,i] = np.nan
+                                self.coll_loc[j,i] = np.nan
+                                self.COM_x[j,i] = np.nan
+                                self.weird_batch.append([c2,h2])
+                        except FileNotFoundError:
+                            print(f"FileNotFoundErorr: h_r = {h2}, c_r = {c2}")
                             self.encroachment_mass[j,i] = np.nan
                             self.coll_time[j,i] = np.nan
                             self.coll_loc[j,i] = np.nan
                             self.COM_x[j,i] = np.nan
+                            self.bad_batch.append([c2,h2])
+
                     else:
                         self.encroachment_mass[j,i] = np.nan
                         self.COM_x[j,i] = np.nan
@@ -1641,16 +1666,48 @@ class DepositionAnalysis:
             np.savetxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', self.COM_x, delimiter = ',')
             print('%0.2f seconds'%(time.time()-start))
 
-    def myPcolor(self,attr,plotTitle,streamlines=True,save=False):
+    def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True):
         if save:
             article_params()
-            plt.figure(figsize=[2.6,2.1])
+            plt.figure(figsize=[3.6,3])
         Z = getattr(self,attr)
         Zm = np.ma.masked_invalid(Z)
-        pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'gouraud')
+        pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'nearest',rasterized=True)
         plt.contour(self.H2,self.C2,Z,colors='k',levels=[0])
+        # plt.xlim(self.H2[0],self.H2[-1])
+        # plt.ylim(self.C2[0],self.C2[-1])
         plt.gca().set_aspect('equal')
         if plotTitle: plt.title(plotTitle)
+        if panel_label_align:
+            points = [(1.0,1.0), (self.H2[-1],0.7), (1.0,0.7), (0.7,0.7), (0.7,1.0), (0.7,self.C2[-1])]
+            labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+            offset_alignment = [
+                ('left','bottom',4,4),
+                ('right','bottom',-3,8),
+                ('center','bottom',0,5),
+                ('left','bottom',4,4),
+                ('left','center',5,0),
+                ('left','top',8,-3)
+            ]
+
+            # plot markers
+            xs, ys = zip(*points)
+            plt.scatter(xs, ys, c='black', edgecolors='black', zorder=3)
+
+            # add labels
+            for (x, y), label, offset in zip(points, labels, offset_alignment):
+                txt = plt.annotate(
+                    label,
+                    (x, y),
+                    xytext=(offset[2], offset[3]),           # offset in points
+                    textcoords='offset points',
+                    color='black',
+                    fontsize=10,
+                    weight='bold',
+                    ha=offset[0],
+                    va=offset[1]
+                )
+                # if label == '(b)': txt.set_path_effects([pe.withStroke(linewidth=1.5, foreground='white')])
         plt.xlabel('$h_r$')
         plt.ylabel('$c_r$')
 
@@ -1659,7 +1716,8 @@ class DepositionAnalysis:
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.1f'))
         cb.set_ticks(np.arange(np.ceil(Zm.min()*10),np.floor(Zm.max()*10)+1)/10)
-        plt.subplots_adjust(left=0.1,right=0.9,top=0.99,bottom=0.16)
+        plt.subplots_adjust(left=0.0,right=0.9,top=0.99,bottom=0.)
+
         if save:
             plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', bbox_inches='tight',dpi=1000)
             plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', bbox_inches='tight',dpi=800)
@@ -1926,8 +1984,8 @@ def collision_details(u_s,rootFile,N=5000,sharp=50):
     plt.rcParams.update({"text.usetex":False})
 
 def NumericalValidationScheme(
-    rootFile='NumericalValidation_2025Mar19/',
-    N=20000,
+    rootFile='Apr29_FinalNumericalValidation/',
+    N=28000,
     h_min=0.0001,
     NuRe=1000,
     CFL=0.1,
@@ -1994,7 +2052,7 @@ def NumericalValidationScheme(
         for i,val in enumerate(param_list):
             params = dict(N=N, h_min=h_min, NuRe=NuRe, CFL=CFL, sharp=sharp)
             params[param] = val   # override the one we’re sweeping
-            sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u'],subFile='',FrSquared=2.828,finalTime=T,**params)
+            sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u'],finalTime=T,**params)
             print(label_table,label_figure)
             # breakpoint()
             # sim.bore_data()
@@ -2018,7 +2076,8 @@ def NumericalValidationScheme(
         # print_latex_table('\\Rey', par_list, par_matrix)
         # # return par_matrix
     NumericalVal('NuRe',[250,500,1000,2000],'\\Rey','\\textrm{Re}')
-    NumericalVal('N',[5000,10000,20000,40000],'\\Delta x','\\Delta x')
+    NumericalVal('N',[7000,14000,28000,56000],'\\Delta x','\\Delta x')
+    # NumericalVal('N',[7000,14000,28000],'\\Delta x','\\Delta x')
     NumericalVal('CFL',[0.4,0.2,0.1,0.05],'\\Lambda','\\Lambda')
     NumericalVal('h_min',[0.0004,0.0002,0.0001,0.00005],'\\hmin','h_{\\textrm{min}}')
 
@@ -2244,8 +2303,8 @@ def article_plots(Figs=list(range(1,12))):
                     sharp=200
                 )
             )
-    if 6 in Figs:
-        MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
+    # if 6 in Figs:
+    #     MainDep = DepositionAnalysis(0.01,'SedimentationInitialConditionTest_2025Jun7/')
     if 1 in Figs:
         # Figure 1,  Results - solution profile
         for sim in Fig1Sims:
@@ -2276,7 +2335,12 @@ def article_plots(Figs=list(range(1,12))):
         # Separate figures, since each one is a different run
     if 6 in Figs:
         # Figure 6,  Sediment deposition - Encroachment mass colormap
-        MainDep.myPcolor('encroachment_mass','',save=True)
+        DepositionAnalysis(
+            0.01,
+            'Feb26_2026_SedimentationInitialConditionTest/',
+            N=28000,
+            sharp=200
+        ).myPcolor('encroachment_mass','',save=True)
         # add a,b,c,d at correct locations aligning with figure 6
         # change labels to c_r and h_r
         # only 1 significant digit on the colorbar
@@ -2309,3 +2373,5 @@ def article_plots(Figs=list(range(1,12))):
         # Figure 11
         # Change velocity ymin to be 0
         Box_SWE_Settling()
+
+# article_plots(Figs=[6])
