@@ -159,9 +159,6 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double C[4][3] = {{11./6.,-7./6.,1./3.},{1./3.,5./6.,-1./6.},{-1./6.,5./6.,1./3.},{1./3.,-7./6.,11./6.}};
     double ep = 1e-6; 
     //Need to create u_left and u_right outside of this function
-    /* double gamma[N][m], u_l[N][m], u_r[N][m]; */
-    /* double alpha_l[N][m], alpha_r[N][m]; */
-    /* double W_l[N][m], W_r[N][m]; */
     double gamma[m], u_l[m], u_r[m];
     double alpha_l[m], alpha_r[m];
     double W_l[m], W_r[m];
