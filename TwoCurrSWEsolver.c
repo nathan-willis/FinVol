@@ -43,8 +43,8 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "Apr30_FinalNumericalValidation/"
-#define subfile "sims/"
+#define fileprefix "benchmark/"
+#define subfile "sims/Cleanup3_after_sqrt_"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -128,18 +128,18 @@ static inline double F_HLL(double h_l, double h_r, double q_l, double q_r, doubl
     double sp;
     double sm;
     double whichVar[4] = {h_r-h_l,q_r-q_l,phi1_r-phi1_l,phi2_r-phi2_l};
-    sp =         q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.);
+    sp =         q_r/h_r + sqrt((phi1_r+phi2_r)/FrSquared);
     sp = fmax(sp,q_r/h_r);
-    sp = fmax(sp,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
-    sp = fmax(sp,q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.));
+    sp = fmax(sp,q_r/h_r - sqrt((phi1_r+phi2_r)/FrSquared));
+    sp = fmax(sp,q_l/h_l + sqrt((phi1_l+phi2_l)/FrSquared));
     sp = fmax(sp,q_l/h_l);
-    sp = fmax(sp,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
-    sm =         q_l/h_l + pow((phi1_l+phi2_l)/FrSquared,1./2.);
+    sp = fmax(sp,q_l/h_l - sqrt((phi1_l+phi2_l)/FrSquared));
+    sm =         q_l/h_l + sqrt((phi1_l+phi2_l)/FrSquared);
     sm = fmin(sm,q_l/h_l);
-    sm = fmin(sm,q_l/h_l - pow((phi1_l+phi2_l)/FrSquared,1./2.));
-    sm = fmin(sm,q_r/h_r + pow((phi1_r+phi2_r)/FrSquared,1./2.));
+    sm = fmin(sm,q_l/h_l - sqrt((phi1_l+phi2_l)/FrSquared));
+    sm = fmin(sm,q_r/h_r + sqrt((phi1_r+phi2_r)/FrSquared));
     sm = fmin(sm,q_r/h_r);
-    sm = fmin(sm,q_r/h_r - pow((phi1_r+phi2_r)/FrSquared,1./2.));
+    sm = fmin(sm,q_r/h_r - sqrt((phi1_r+phi2_r)/FrSquared));
 
     if(sm >=0.){return flux(h_l,q_l,phi1_l,phi2_l,which);}
     if(sp <=0.){return flux(h_r,q_r,phi1_r,phi2_r,which);}
@@ -165,16 +165,16 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double alpha_l_row_sum, alpha_r_row_sum;
     int i,r;
     for(i=0;i<N;i++){
-        gamma[0] = 13./12.*pow(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)],2) + 1./4.*pow(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)],2);
-        gamma[1] = 13./12.*pow(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)],2) + 1./4.*pow(u_[BC(i-1)] - u_[BC(i+1)],2);
-        gamma[2] = 13./12.*pow(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i],2) + 1./4.*pow(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i],2);
+        gamma[0] = 13./12.*(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)])*(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)]) + 1./4.*(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)])*(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)]);
+        gamma[1] = 13./12.*(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)])*(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)]) + 1./4.*(u_[BC(i-1)] - u_[BC(i+1)])*(u_[BC(i-1)] - u_[BC(i+1)]);
+        gamma[2] = 13./12.*(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i])*(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i]) + 1./4.*(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i])*(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i]);
 
         for(r=0;r<m;r++){
             u_l[r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
             u_r[r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
 
-            alpha_l[r] = beta[0][r]/pow(ep + gamma[r],2);
-            alpha_r[r] = beta[1][r]/pow(ep + gamma[r],2);
+            alpha_l[r] = beta[0][r]/((ep + gamma[r])*(ep + gamma[r]));
+            alpha_r[r] = beta[1][r]/((ep + gamma[r])*(ep + gamma[r]));
         }
 
         alpha_l_row_sum = 0;
@@ -279,7 +279,7 @@ int main(int argc, char* argv[]){
 
     initialize(); // 
     
-    //double k = pow(*dx,5./3.)/2; // time step to satisfy CFL-condtion with RK2 time stepping
+    //double k = (*dx,5./)*(*dx,5./)/2; // time step to satisfy CFL-condtion with RK2 time stepping
     double k = (*dx)*CFL;
     double t = 0.; // initialize time
 
