@@ -44,7 +44,7 @@ double U_s;
 
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/Cleanup3_after_sqrt_"
+#define subfile "sims/Cleanup6_after_TempsRestucture_"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -164,10 +164,53 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double W_l[m], W_r[m];
     double alpha_l_row_sum, alpha_r_row_sum;
     int i,r;
+    double c1 = 13./12.;
+    double c2 = 0.25;
     for(i=0;i<N;i++){
-        gamma[0] = 13./12.*(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)])*(u_[i] - 2.*u_[BC(i+1)] + u_[BC(i+2)]) + 1./4.*(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)])*(3.*u_[i] - 4.*u_[BC(i+1)] + u_[BC(i+2)]);
-        gamma[1] = 13./12.*(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)])*(u_[BC(i-1)] - 2.*u_[i] + u_[BC(i+1)]) + 1./4.*(u_[BC(i-1)] - u_[BC(i+1)])*(u_[BC(i-1)] - u_[BC(i+1)]);
-        gamma[2] = 13./12.*(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i])*(u_[BC(i-2)] - 2.*u_[BC(i-1)] + u_[i]) + 1./4.*(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i])*(u_[BC(i-2)] - 4.*u_[BC(i-1)] + 3.*u_[i]);
+        int im2 = BC(i-2);
+        int im1 = BC(i-1);
+        int ip1 = BC(i+1);
+        int ip2 = BC(i+2);
+
+        double uim2 = u_[im2];
+        double uim1 = u_[im1];
+        double ui   = u_[i];
+        double uip1 = u_[ip1];
+        double uip2 = u_[ip2];
+
+        /* double a0 = ui - 2.*uip1 + uip2; */
+        /* double b0 = 3.*ui - 4.*uip1 + uip2; */
+        /* gamma[0] = c1*(a0)*(a0) + c2*(b0)*(b0); */
+
+        /* double a1 = uim1 - 2.*ui + uip1; */
+        /* double b1 = uim1 - uip1; */
+        /* gamma[1] = c1*(a1)*(a1) + c2*(b1)*(b1); */
+
+        /* double a2 = uim2 - 2.*uim1 + ui; */
+        /* double b2 = uim2 - 4.*uim1 + 3.*ui; */
+        /* gamma[2] = c1*(a2)*(a2) + c2*(b2)*(b2); */
+
+        /* double uim2 = u_[BC(i-2)]; */
+        /* double uim1 = u_[BC(i-1)]; */
+        /* double ui   = u_[i]; */
+        /* double uip1 = u_[BC(i+1)]; */
+        /* double uip2 = u_[BC(i+2)]; */
+
+        double t0 = ui - 2.*uip1 + uip2;
+        double t1 = 3.*ui - 4.*uip1 + uip2;
+        gamma[0] = c1*(t0)*(t0) + c2*(t1)*(t1);
+
+        t0 = uim1 - 2.*ui + uip1;
+        t1 = uim1 - uip1;
+        gamma[1] = c1*(t0)*(t0) + c2*(t1)*(t1);
+
+        t0 = uim2 - 2.*uim1 + ui;
+        t1 = uim2 - 4.*uim1 + 3.*ui;
+        gamma[2] = c1*(t0)*(t0) + c2*(t1)*(t1);
+
+        /* gamma[0] = c1*(ui - 2.*uip1 + uip2)*(ui - 2.*uip1 + uip2) + c2*(3.*ui - 4.*uip1 + uip2)*(3.*ui - 4.*uip1 + uip2); */
+        /* gamma[1] = c1*(uim1 - 2.*ui + uip1)*(uim1 - 2.*ui + uip1) + c2*(uim1 - uip1)*(uim1 - uip1); */
+        /* gamma[2] = c1*(uim2 - 2.*uim1 + ui)*(uim2 - 2.*uim1 + ui) + c2*(uim2 - 4.*uim1 + 3.*ui)*(uim2 - 4.*uim1 + 3.*ui); */
 
         for(r=0;r<m;r++){
             u_l[r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
