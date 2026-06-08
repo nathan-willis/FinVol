@@ -176,7 +176,7 @@ class TurbiditySim:
             # print the log file to screen. 
             print('')
             with open(self.rootFile + self.subFile + self.fileName + '/info.log') as fh:
-                for line in fh: print(line)
+                for line in fh: print(line,end='')
 
     def makeMP4(self, varList = ['h','u','c1','c2'],tMax=1000.,show_legend = False, xlim = None, ylim = None,framerate = 30.):#xmax = None, xmin = None,ymax = None, ymin = ):
         plt.rcParams.update({"text.usetex":False})

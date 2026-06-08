@@ -2,4 +2,6 @@
 *.txt
 *.zip
 *.pdf
+*.png
+*.log
 benchmark/
