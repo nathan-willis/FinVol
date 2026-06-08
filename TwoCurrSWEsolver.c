@@ -43,17 +43,17 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "benchmark/"
-#define subfile "sims/Cleanup6_after_TempsRestucture_"
+#define fileprefix "testCollisionDetection/"
+#define subfile "sims/"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
-int save_phi1 = 0; //Decide if you want to save to a file or not.
-int save_phi2 = 0; //Decide if you want to save to a file or not.
+int save_phi1 = 1; //Decide if you want to save to a file or not.
+int save_phi2 = 1; //Decide if you want to save to a file or not.
 int save_deposit = 0; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = 1.; // Save timestamp this often
+double print_when = 0.05; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
@@ -261,7 +261,7 @@ static inline void collision_check(){
     int i;
     int phi1_right = 0;
     int phi2_left = N;
-    double phi_tol = 0.05;
+    double phi_tol = 0.05*h_min;
     for(i=0;i<N;i++){
         if(phi1[i]>phi_tol){
             phi1_right = max_fct(i,phi1_right);

@@ -74,7 +74,23 @@ mpllinestyles = ('solid','dashed','dotted','dashdot',(0, (3, 5, 1, 5, 1, 5)))
 mpllinestyles = ('solid','dashed','dotted','dashdot')
 mplmarkers = ('o','v','^','<','>','s','*','D','P','X')
 
-variable_dict = {'c':'concentration', 'c1':'left concentration', 'c2':'right concentration', 'u':'velocity', 'q':'q, conserved velocity', 'phi':'phi, conserved concentration', 'h':'height','h_latex':'$h(x,t)$','u_latex':'$u(x,t)$','c1_latex':'$c_1(x,t)$','c2_latex':'$c_2(x,t)$','d1':'deposit 1','d2':'deposit 2'}
+variable_dict = {
+    'c':'concentration',
+    'c1':'left concentration',
+    'c2':'right concentration',
+    'u':'velocity',
+    'q':'q, conserved velocity',
+    'phi':'phi, conserved concentration',
+    'h':'height',
+    'h_latex':'$h(x,t)$',
+    'u_latex':'$u(x,t)$',
+    'c1_latex':'$c_1(x,t)$',
+    'c2_latex':'$c_2(x,t)$',
+    'd1':'deposit 1',
+    'd2':'deposit 2',
+    'phi1_latex':'$\phi_1(x,t)$',
+    'phi2_latex':'$\phi_2(x,t)$'
+}
 char_to_cons = {'u':'q','c1':'phi1','c2':'phi2'}
 char_vars = ['u','c1','c2']
 
