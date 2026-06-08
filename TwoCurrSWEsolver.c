@@ -43,8 +43,8 @@ double U_s;
 #define cur2wid 1.0
 
 // File information
-#define fileprefix "testCollisionDetection/"
-#define subfile "sims/"
+#define fileprefix "benchmark/"
+#define subfile "sims/cleanup1_fixh_temp_inRK"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -369,15 +369,15 @@ int main(int argc, char* argv[]){
         for(i=0;i<N;i++){
             h_temp2[i]    = 3./4.*h[i]    + 1./4.*h_temp1[i]    - k/(4.*(*dx))*DiscreteSpatial(i,0) + (1./4.)*k*diff(h_temp1,i,0);
             q_temp2[i]    = 3./4.*q[i]    + 1./4.*q_temp1[i]    - k/(4.*(*dx))*DiscreteSpatial(i,1) + (1./4.)*k*diff(q_temp1,i,0);
-            phi1_temp2[i] = 3./4.*phi1[i] + 1./4.*phi1_temp1[i] - k/4.*(U_s*phi1_temp1[i]/h[i] + DiscreteSpatial(i,2)/(*dx)) + (1./4.)*k*diff(phi1_temp1,i,1);
-            phi2_temp2[i] = 3./4.*phi2[i] + 1./4.*phi2_temp1[i] - k/4.*(U_s*phi2_temp1[i]/h[i] + DiscreteSpatial(i,3)/(*dx)) + (1./4.)*k*diff(phi2_temp1,i,1);
+            phi1_temp2[i] = 3./4.*phi1[i] + 1./4.*phi1_temp1[i] - k/4.*(U_s*phi1_temp1[i]/h_temp1[i] + DiscreteSpatial(i,2)/(*dx)) + (1./4.)*k*diff(phi1_temp1,i,1);
+            phi2_temp2[i] = 3./4.*phi2[i] + 1./4.*phi2_temp1[i] - k/4.*(U_s*phi2_temp1[i]/h_temp1[i] + DiscreteSpatial(i,3)/(*dx)) + (1./4.)*k*diff(phi2_temp1,i,1);
         }
         run_WENO(h_temp2,q_temp2,phi1_temp2,phi2_temp2);
         for(i=0;i<N;i++){
             h[i]    = h[i]/3.    + 2./3.*h_temp2[i]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i,0) + (2./3.)*k*diff(h_temp2,i,0); // Second step of RK2
             q[i]    = q[i]/3.    + 2./3.*q_temp2[i]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i,1) + (2./3.)*k*diff(q_temp2,i,0); // Second step of RK2
-            phi1[i] = phi1[i]/3. + 2./3.*phi1_temp2[i] - 2.*k/3.*(U_s*phi1_temp2[i]/h[i] + DiscreteSpatial(i,2)/(*dx)) + (2./3.)*k*diff(phi1_temp2,i,1); // Second step of RK2
-            phi2[i] = phi2[i]/3. + 2./3.*phi2_temp2[i] - 2.*k/3.*(U_s*phi2_temp2[i]/h[i] + DiscreteSpatial(i,3)/(*dx)) + (2./3.)*k*diff(phi2_temp2,i,1); // Second step of RK2
+            phi1[i] = phi1[i]/3. + 2./3.*phi1_temp2[i] - 2.*k/3.*(U_s*phi1_temp2[i]/h_temp2[i] + DiscreteSpatial(i,2)/(*dx)) + (2./3.)*k*diff(phi1_temp2,i,1); // Second step of RK2
+            phi2[i] = phi2[i]/3. + 2./3.*phi2_temp2[i] - 2.*k/3.*(U_s*phi2_temp2[i]/h_temp2[i] + DiscreteSpatial(i,3)/(*dx)) + (2./3.)*k*diff(phi2_temp2,i,1); // Second step of RK2
         }
         if(!collision){
             CT = t; 
