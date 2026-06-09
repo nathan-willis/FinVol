@@ -11,6 +11,7 @@
 // Numerical parameters 
 //#define N 8000 // N+1 nodes, N cells
 #define m 3  // WENO stencil size
+#define ng 3 // number of ghost cells
 //#define NuRe 1000. // Numerical Reynolds number
 //#define NuPe NuRe // Numerical Peclet number
 //#define h_min 0.0001 // minimum thickness
@@ -43,9 +44,16 @@ double U_s;
 #define cur1wid 1.0
 #define cur2wid 1.0
 
+typedef enum {
+    PERIODIC = 0,
+    OUTFLOW = 1,
+    REFLECTIVE = 2
+} BCType;
+
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/cleanup4_nonrecursiveBCTwowza"
+#define subfile "sims/cleanup5_ghostPray"
+static BCType bc_type = PERIODIC; 
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -95,7 +103,7 @@ double poly_spline(double x, double M, double h, double c, double elseval);
 double squarewave(double x, double center, double width, double max, double min);
 void initialize();
 void avg_cell(double *u, double *u_avg);
-void print_to_file(double t, double *x,FILE *hist2);
+void print_to_file(double t, double *x,FILE *hist2, int offset);
 void print_conserved_variables_to_file(double t);
 void print_params_to_log();
 void print_date_time();
@@ -129,18 +137,53 @@ static inline void write_binary_header(FILE *f){
 // These are functions called in the while loop. 
 //int BC(int aa);
 static inline int BC(int aa){
-    return (aa+N)%N;
-    /* if(aa<0){return BC(aa+N);} */
-    /* else{return aa%N;} */
+    switch(bc_type){
+        case PERIODIC:
+            return (aa + N) % N;
+        case OUTFLOW:
+            if(aa < 0){ return 0; }
+            if(aa >= N){ return N - 1; }
+            return aa;
+        case REFLECTIVE:
+            if(aa < 0){ return -aa - 1; }
+            if(aa >= N){ return 2 * N - aa - 1; }
+            return aa;
+        default:
+            fprintf(stderr, "Unknown boundary condition mode %d\n", (int)bc_type);
+            exit(EXIT_FAILURE);
+    }
 }
+/* static inline int BC(int aa){ */
+/*     return (aa+N)%N; */
+/*     /1* if(aa<0){return BC(aa+N);} *1/ */
+/*     /1* else{return aa%N;} *1/ */
+/* } */
+
+// Fill ghost cells
+static inline void fill_ghost_cells(double *u_){
+    int i;
+    for(i=0;i<ng;i++){
+        u_[i] = u_[BC(i-ng)+ng];
+        u_[N+i+ng] = u_[BC(N+i)+ng];
+    }
+}
+
+static inline void run_fill_ghost_cells(double *hh, double *qq, double *pphi1, double *pphi2){
+    fill_ghost_cells(hh);
+    fill_ghost_cells(qq);
+    fill_ghost_cells(pphi1);
+    fill_ghost_cells(pphi2);
+}
+
 //double diff(double *u,int i,int which);
 static inline double diff(double *u,int i,int which){
+    // the index i has already been shifted by the ghost_cells
     double diff_const;
     double d_co[4] = {-49./18.,3./2.,-3./20.,1./90.}; // coefficients for 6th-order central finite difference stencil for second-derivatve
 
     if(which == 0){diff_const = 1./NuRe;}
     if(which == 1){diff_const = 1./NuPe;}
-    return diff_const*(1./(*dx*(*dx)))*(u[BC(i-3)]*d_co[3] + u[BC(i-2)]*d_co[2] + u[BC(i-1)]*d_co[1] + u[i]*d_co[0] + u[BC(i+1)]*d_co[1] + u[BC(i+2)]*d_co[2] + u[BC(i+3)]*d_co[3]);
+    return diff_const*(1./(*dx*(*dx)))*(u[i-3]*d_co[3] + u[i-2]*d_co[2] + u[i-1]*d_co[1] + u[i]*d_co[0] + u[i+1]*d_co[1] + u[i+2]*d_co[2] + u[i+3]*d_co[3]);
 }
 //double flux(double h, double q, double phi1, double phi2, int which);
 static inline double flux(double h, double q, double phi1, double phi2, int which){
@@ -177,8 +220,9 @@ static inline double F_HLL(double h_l, double h_r, double q_l, double q_r, doubl
 }
 //double DiscreteSpatial(int i, int which);
 static inline double DiscreteSpatial(int i, int which){
-    return F_HLL(hL[i],hR[BC(i+1)],qL[i],qR[BC(i+1)],phi1L[i],phi1R[BC(i+1)],phi2L[i],phi2R[BC(i+1)],which) - 
-           F_HLL(hL[BC(i-1)],hR[i],qL[BC(i-1)],qR[i],phi1L[BC(i-1)],phi1R[i],phi2L[BC(i-1)],phi2R[i],which);
+    // the index i has already been shifted by the ghost_cells
+    return F_HLL(hL[i],hR[i+1],qL[i],qR[i+1],phi1L[i],phi1R[i+1],phi2L[i],phi2R[i+1],which) - 
+           F_HLL(hL[i-1],hR[i],qL[i-1],qR[i],phi1L[i-1],phi1R[i],phi2L[i-1],phi2R[i],which);
 }
 //void WENO(double *u_, double *u_left,double *u_right);
 static inline void WENO(double *u_, double *u_left,double *u_right){
@@ -195,14 +239,14 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double c1 = 13./12.;
     double c2 = 0.25;
     for(i=0;i<N;i++){
-        int im2 = BC(i-2);
-        int im1 = BC(i-1);
-        int ip1 = BC(i+1);
-        int ip2 = BC(i+2);
+        int im2 = i-2+ng;
+        int im1 = i-1+ng;
+        int ip1 = i+1+ng;
+        int ip2 = i+2+ng;
 
         double uim2 = u_[im2];
         double uim1 = u_[im1];
-        double ui   = u_[i];
+        double ui   = u_[i+ng];
         double uip1 = u_[ip1];
         double uip2 = u_[ip2];
 
@@ -241,8 +285,8 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
         /* gamma[2] = c1*(uim2 - 2.*uim1 + ui)*(uim2 - 2.*uim1 + ui) + c2*(uim2 - 4.*uim1 + 3.*ui)*(uim2 - 4.*uim1 + 3.*ui); */
 
         for(r=0;r<m;r++){
-            u_l[r] = C[r+1][0]*u_[BC(i-r)] + C[r+1][1]*u_[BC(i+1-r)] + C[r+1][2]*u_[BC(i+2-r)];
-            u_r[r] = C[r][0]*u_[BC(i-r)]   + C[r][1]*u_[BC(i+1-r)]   + C[r][2]*u_[BC(i+2-r)];
+            u_l[r] = C[r+1][0]*u_[i-r+ng] + C[r+1][1]*u_[i+1-r+ng] + C[r+1][2]*u_[i+2-r+ng];
+            u_r[r] = C[r][0]*u_[i-r+ng]   + C[r][1]*u_[i+1-r+ng]   + C[r][2]*u_[i+2-r+ng];
 
             alpha_l[r] = beta[0][r]/((ep + gamma[r])*(ep + gamma[r]));
             alpha_r[r] = beta[1][r]/((ep + gamma[r])*(ep + gamma[r]));
@@ -259,11 +303,11 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
             W_r[r] = alpha_r[r]/alpha_r_row_sum;
         }
    
-        u_left[i] = 0;
-        u_right[i] = 0;
+        u_left[i+ng] = 0;
+        u_right[i+ng] = 0;
         for(r=0;r<m;r++){
-            u_left[i]  += W_l[r]*u_l[r];
-            u_right[i] += W_r[r]*u_r[r];
+            u_left[i+ng]  += W_l[r]*u_l[r];
+            u_right[i+ng] += W_r[r]*u_r[r];
         }
     }
 }
@@ -273,6 +317,8 @@ static inline void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2
     WENO(qq,qL,qR); // Perform WENO to get uL and uR from the last solution vector of cell averages
     WENO(pphi1,phi1L,phi1R); // Perform WENO to get uL and uR from the last solution vector of cell averages
     WENO(pphi2,phi2L,phi2R); // Perform WENO to get uL and uR from the last solution vector of cell averages
+    run_fill_ghost_cells(hL,qL,phi1L,phi2L);
+    run_fill_ghost_cells(hR,qR,phi1R,phi2R);
 }
 //int max_fct(int aa, int bb);
 static inline int max_fct(int aa, int bb){
@@ -291,10 +337,10 @@ static inline void collision_check(){
     int phi2_left = N;
     double phi_tol = 0.05*h_min;
     for(i=0;i<N;i++){
-        if(phi1[i]>phi_tol){
+        if(phi1[i+ng]>phi_tol){
             phi1_right = max_fct(i,phi1_right);
         }
-        if(phi2[i]>phi_tol){
+        if(phi2[i+ng]>phi_tol){
             phi2_left = min_fct(i,phi2_left);
         }
     }
@@ -398,26 +444,29 @@ int main(int argc, char* argv[]){
             k = T-t;
             is_last = 1;
         }
+        run_fill_ghost_cells(h,q,phi1,phi2);
         run_WENO(h,q,phi1,phi2);
         for(i=0;i<N;i++){
-            h_temp1[i]    = h[i]    - k/(*dx)*DiscreteSpatial(i,0) + k*diff(h,i,0); // First step of RK2
-            q_temp1[i]    = q[i]    - k/(*dx)*DiscreteSpatial(i,1) + k*diff(q,i,0);// First step of RK2
-            phi1_temp1[i] = phi1[i] - k*(U_s*phi1[i]/h[i] + DiscreteSpatial(i,2)/(*dx)) + k*diff(phi1,i,1);// First step of RK2
-            phi2_temp1[i] = phi2[i] - k*(U_s*phi2[i]/h[i] + DiscreteSpatial(i,3)/(*dx)) + k*diff(phi2,i,1);// First step of RK2
+            h_temp1[i+ng]    = h[i+ng]    - k/(*dx)*DiscreteSpatial(i+ng,0) + k*diff(h,i+ng,0); // First step of RK2
+            q_temp1[i+ng]    = q[i+ng]    - k/(*dx)*DiscreteSpatial(i+ng,1) + k*diff(q,i+ng,0);// First step of RK2
+            phi1_temp1[i+ng] = phi1[i+ng] - k*(U_s*phi1[i+ng]/h[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + k*diff(phi1,i+ng,1);// First step of RK2
+            phi2_temp1[i+ng] = phi2[i+ng] - k*(U_s*phi2[i+ng]/h[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + k*diff(phi2,i+ng,1);// First step of RK2
         }
+        run_fill_ghost_cells(h_temp1,q_temp1,phi1_temp1,phi2_temp1);
         run_WENO(h_temp1,q_temp1,phi1_temp1,phi2_temp1);
         for(i=0;i<N;i++){
-            h_temp2[i]    = 3./4.*h[i]    + 1./4.*h_temp1[i]    - k/(4.*(*dx))*DiscreteSpatial(i,0) + (1./4.)*k*diff(h_temp1,i,0);
-            q_temp2[i]    = 3./4.*q[i]    + 1./4.*q_temp1[i]    - k/(4.*(*dx))*DiscreteSpatial(i,1) + (1./4.)*k*diff(q_temp1,i,0);
-            phi1_temp2[i] = 3./4.*phi1[i] + 1./4.*phi1_temp1[i] - k/4.*(U_s*phi1_temp1[i]/h_temp1[i] + DiscreteSpatial(i,2)/(*dx)) + (1./4.)*k*diff(phi1_temp1,i,1);
-            phi2_temp2[i] = 3./4.*phi2[i] + 1./4.*phi2_temp1[i] - k/4.*(U_s*phi2_temp1[i]/h_temp1[i] + DiscreteSpatial(i,3)/(*dx)) + (1./4.)*k*diff(phi2_temp1,i,1);
+            h_temp2[i+ng]    = 3./4.*h[i+ng]    + 1./4.*h_temp1[i+ng]    - k/(4.*(*dx))*DiscreteSpatial(i+ng,0) + (1./4.)*k*diff(h_temp1,i+ng,0);
+            q_temp2[i+ng]    = 3./4.*q[i+ng]    + 1./4.*q_temp1[i+ng]    - k/(4.*(*dx))*DiscreteSpatial(i+ng,1) + (1./4.)*k*diff(q_temp1,i+ng,0);
+            phi1_temp2[i+ng] = 3./4.*phi1[i+ng] + 1./4.*phi1_temp1[i+ng] - k/4.*(U_s*phi1_temp1[i+ng]/h_temp1[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + (1./4.)*k*diff(phi1_temp1,i+ng,1);
+            phi2_temp2[i+ng] = 3./4.*phi2[i+ng] + 1./4.*phi2_temp1[i+ng] - k/4.*(U_s*phi2_temp1[i+ng]/h_temp1[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + (1./4.)*k*diff(phi2_temp1,i+ng,1);
         }
+        run_fill_ghost_cells(h_temp2,q_temp2,phi1_temp2,phi2_temp2);
         run_WENO(h_temp2,q_temp2,phi1_temp2,phi2_temp2);
         for(i=0;i<N;i++){
-            h[i]    = h[i]/3.    + 2./3.*h_temp2[i]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i,0) + (2./3.)*k*diff(h_temp2,i,0); // Second step of RK2
-            q[i]    = q[i]/3.    + 2./3.*q_temp2[i]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i,1) + (2./3.)*k*diff(q_temp2,i,0); // Second step of RK2
-            phi1[i] = phi1[i]/3. + 2./3.*phi1_temp2[i] - 2.*k/3.*(U_s*phi1_temp2[i]/h_temp2[i] + DiscreteSpatial(i,2)/(*dx)) + (2./3.)*k*diff(phi1_temp2,i,1); // Second step of RK2
-            phi2[i] = phi2[i]/3. + 2./3.*phi2_temp2[i] - 2.*k/3.*(U_s*phi2_temp2[i]/h_temp2[i] + DiscreteSpatial(i,3)/(*dx)) + (2./3.)*k*diff(phi2_temp2,i,1); // Second step of RK2
+            h[i+ng]    = h[i+ng]/3.    + 2./3.*h_temp2[i+ng]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i+ng,0) + (2./3.)*k*diff(h_temp2,i+ng,0); // Second step of RK2
+            q[i+ng]    = q[i+ng]/3.    + 2./3.*q_temp2[i+ng]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i+ng,1) + (2./3.)*k*diff(q_temp2,i+ng,0); // Second step of RK2
+            phi1[i+ng] = phi1[i+ng]/3. + 2./3.*phi1_temp2[i+ng] - 2.*k/3.*(U_s*phi1_temp2[i+ng]/h_temp2[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + (2./3.)*k*diff(phi1_temp2,i+ng,1); // Second step of RK2
+            phi2[i+ng] = phi2[i+ng]/3. + 2./3.*phi2_temp2[i+ng] - 2.*k/3.*(U_s*phi2_temp2[i+ng]/h_temp2[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + (2./3.)*k*diff(phi2_temp2,i+ng,1); // Second step of RK2
         }
         if(!collision){
             CT = t; 
@@ -425,8 +474,8 @@ int main(int argc, char* argv[]){
         }
         
         for(i=0;i<N;i++){
-            deposit1[i]+=k*U_s*phi1[i]/h[i];
-            deposit2[i]+=k*U_s*phi2[i]/h[i];
+            deposit1[i]+=k*U_s*phi1[i+ng]/h[i+ng];
+            deposit2[i]+=k*U_s*phi2[i+ng]/h[i+ng];
         }
        
         t+=k;
@@ -445,7 +494,7 @@ int main(int argc, char* argv[]){
             printf("##########################################\n\n");
             print_screen_check -= print_to_screen;
         }
-        if(isnan(h[N/2])){
+        if(isnan(h[N/2+ng])){
            printf("\n \n WAH! BLOW UP!! \n \n");
            fprintf(log_file,"\nBLOW UP! nan was detected at the center of the spatial domain and code was terminated at time t=%0.4f.\n",t);
            t = 10000000;
@@ -521,12 +570,12 @@ void initialize(){
 void avg_cell(double *u, double *u_avg){
     int i;
     for(i=0;i<N;i++){
-        u_avg[i] = (u[i] + u[i+1])/2.;
+        u_avg[i+ng] = (u[i] + u[i+1])/2.;
     }
 }
 
 
-void print_to_file(double t, double *x,FILE *hist2){
+void print_to_file(double t, double *x,FILE *hist2, int offset){
     int i;
     if(save_binary){
         int j = 0;
@@ -534,7 +583,7 @@ void print_to_file(double t, double *x,FILE *hist2){
         save_row[j++] = t;
         for(i=0;i<N;i++){
             if((i+J_save/2)%J_save==0){
-                save_row[j++] = x[i];
+                save_row[j++] = x[i+offset];
             }
         }
         fwrite(save_row, sizeof(double), save_row_len, hist2);
@@ -542,7 +591,7 @@ void print_to_file(double t, double *x,FILE *hist2){
         fprintf(hist2,"%3.10f ",t);
         for(i=0;i<N;i++){
             if((i+J_save/2)%J_save==0){
-                fprintf(hist2,"%3.10f ",x[i]);
+                fprintf(hist2,"%3.10f ",x[i+offset]);
             }
         }
         fprintf(hist2,"\n");
@@ -554,20 +603,20 @@ void print_conserved_variables_to_file(double t){
     // Then save the initial conditions
     // It is important that x gets printed before each IC, b/c the post proc will unpack the .npy files in that way. 
     if(print_first_line){
-        if(save_phi1){print_to_file(t,x,phi1_file);}
-        if(save_phi2){print_to_file(t,x,phi2_file);}
-        if(save_q){print_to_file(t,x,q_file);}
-        if(save_h){print_to_file(t,x,h_file);}
-        if(save_deposit){print_to_file(t,x,deposit1_file);}
-        if(save_deposit){print_to_file(t,x,deposit2_file);}
+        if(save_phi1){print_to_file(t,x,phi1_file,0);}
+        if(save_phi2){print_to_file(t,x,phi2_file,0);}
+        if(save_q){print_to_file(t,x,q_file,0);}
+        if(save_h){print_to_file(t,x,h_file,0);}
+        if(save_deposit){print_to_file(t,x,deposit1_file,0);}
+        if(save_deposit){print_to_file(t,x,deposit2_file,0);}
         print_first_line=0;
     }
-    if(save_phi1){print_to_file(t,phi1,phi1_file);}
-    if(save_phi2){print_to_file(t,phi2,phi2_file);}
-    if(save_q){print_to_file(t,q,q_file);}
-    if(save_h){print_to_file(t,h,h_file);}
-    if(save_deposit){print_to_file(t,deposit1,deposit1_file);}
-    if(save_deposit){print_to_file(t,deposit2,deposit2_file);}
+    if(save_phi1){print_to_file(t,phi1,phi1_file,ng);}
+    if(save_phi2){print_to_file(t,phi2,phi2_file,ng);}
+    if(save_q){print_to_file(t,q,q_file,ng);}
+    if(save_h){print_to_file(t,h,h_file,ng);}
+    if(save_deposit){print_to_file(t,deposit1,deposit1_file,0);}
+    if(save_deposit){print_to_file(t,deposit2,deposit2_file,0);}
 }
 
 void print_params_to_log(){
@@ -623,32 +672,32 @@ void pointers (){
     dx = malloc(sizeof(double)); 
     
     h_= malloc((N+1)*sizeof(double)); // Declaring pointer to vector of nodal points for h
-    h = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for h
-    h_temp1 = malloc((N)*sizeof(double));// Declaring pointer to temporary h vector for RK3
-    h_temp2 = malloc((N)*sizeof(double));// Declaring pointer to temporary h vector for RK3
-    hL = malloc((N)*sizeof(double));// Declaring pointer to left h vector for WENO and input of Lax-Friedrichs flux
-    hR = malloc((N)*sizeof(double));// Declaring pointer to right h vector for WENO and input of Lax-Friedrichs flux
+    h = malloc((N+2*ng)*sizeof(double)); // Declaring pointer to vector of cell averages for h
+    h_temp1 = malloc((N+2*ng)*sizeof(double));// Declaring pointer to temporary h vector for RK3
+    h_temp2 = malloc((N+2*ng)*sizeof(double));// Declaring pointer to temporary h vector for RK3
+    hL = malloc((N+2*ng)*sizeof(double));// Declaring pointer to left h vector for WENO and input of Lax-Friedrichs flux
+    hR = malloc((N+2*ng)*sizeof(double));// Declaring pointer to right h vector for WENO and input of Lax-Friedrichs flux
     // Doing all the same declarations above, but now for q, which is hu or (height)(velocity)
     q_= malloc((N+1)*sizeof(double));
-    q = malloc((N)*sizeof(double));
-    q_temp1 = malloc((N)*sizeof(double));
-    q_temp2 = malloc((N)*sizeof(double));
-    qL = malloc((N)*sizeof(double));
-    qR = malloc((N)*sizeof(double));
+    q = malloc((N+2*ng)*sizeof(double));
+    q_temp1 = malloc((N+2*ng)*sizeof(double));
+    q_temp2 = malloc((N+2*ng)*sizeof(double));
+    qL = malloc((N+2*ng)*sizeof(double));
+    qR = malloc((N+2*ng)*sizeof(double));
     // Doing all the same declarations above, but now for phi1, which is (height)(concentration 1)
     phi1_= malloc((N+1)*sizeof(double));
-    phi1 = malloc((N)*sizeof(double));
-    phi1_temp1 = malloc((N)*sizeof(double));
-    phi1_temp2 = malloc((N)*sizeof(double));
-    phi1L = malloc((N)*sizeof(double));
-    phi1R = malloc((N)*sizeof(double));
+    phi1 = malloc((N+2*ng)*sizeof(double));
+    phi1_temp1 = malloc((N+2*ng)*sizeof(double));
+    phi1_temp2 = malloc((N+2*ng)*sizeof(double));
+    phi1L = malloc((N+2*ng)*sizeof(double));
+    phi1R = malloc((N+2*ng)*sizeof(double));
     // Doing all the same declarations above, but now for phi2, which is (height)(concentration 2)
     phi2_= malloc((N+1)*sizeof(double));
-    phi2 = malloc((N)*sizeof(double));
-    phi2_temp1 = malloc((N)*sizeof(double));
-    phi2_temp2 = malloc((N)*sizeof(double));
-    phi2L = malloc((N)*sizeof(double));
-    phi2R = malloc((N)*sizeof(double));
+    phi2 = malloc((N+2*ng)*sizeof(double));
+    phi2_temp1 = malloc((N+2*ng)*sizeof(double));
+    phi2_temp2 = malloc((N+2*ng)*sizeof(double));
+    phi2L = malloc((N+2*ng)*sizeof(double));
+    phi2R = malloc((N+2*ng)*sizeof(double));
 
     deposit1 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit1
     deposit2 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit2
