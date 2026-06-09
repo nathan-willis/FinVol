@@ -1,6 +1,7 @@
 #include<math.h>
 #include<stdio.h>
 #include<stdlib.h>
+#include<stdint.h>
 #include<sys/stat.h>
 #include<time.h>
 #include<string.h>
@@ -44,7 +45,7 @@ double U_s;
 
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/cleanup1_fixh_temp_inRK"
+#define subfile "sims/cleanup3_binaryBuffer"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -61,8 +62,9 @@ int print_info = 1;
 double print_first_line;
 
 int collision = 0; // Flag to know if a collision was detected or not. 
-double CT, CI, CX; // declaring variables to store collsion time, index, and position. 
+double CT, CI, CX; // declaring variables to store collision time, index, and position. 
 int is_last = 0; // Check if this is the last iteration. 
+int save_binary = 1; // Default output format is binary.
 
 double time_check; // Declare a variable to store the time to time the finite volume solver
 
@@ -85,6 +87,8 @@ double *phi2_,*phi2,*phi2_temp1,*phi2_temp2,*phi2L,*phi2R;
 double *deposit1,*deposit2;
 
 FILE *h_file,*q_file,*phi1_file,*phi2_file,*deposit1_file,*deposit2_file,*log_file; // Variable identifying a file
+double *save_row;
+int save_row_len;
 
 
 double poly_spline(double x, double M, double h, double c, double elseval);
@@ -99,6 +103,29 @@ void pointers ();
 void unpointers ();
 void print_usage(const char *prog);
 
+
+static inline int saved_point_count(void){
+    int count = 0;
+    int i;
+    for(i=0;i<N;i++){
+        if((i+J_save/2)%J_save==0){count++;}
+    }
+    return count;
+}
+static inline void write_binary_header(FILE *f){
+    const char magic[8] = {'T','C','W','E','N','O','1','\0'};
+    uint32_t version = 1;
+    uint32_t n = (uint32_t)N;
+    uint32_t j_save = (uint32_t)J_save;
+    uint32_t n_saved = (uint32_t)saved_point_count();
+    uint32_t row_len = 1u + n_saved;
+    fwrite(magic, sizeof(magic), 1, f);
+    fwrite(&version, sizeof(version), 1, f);
+    fwrite(&n, sizeof(n), 1, f);
+    fwrite(&j_save, sizeof(j_save), 1, f);
+    fwrite(&n_saved, sizeof(n_saved), 1, f);
+    fwrite(&row_len, sizeof(row_len), 1, f);
+}
 // These are functions called in the while loop. 
 //int BC(int aa);
 static inline int BC(int aa){
@@ -288,6 +315,10 @@ int main(int argc, char* argv[]){
         fprintf(stderr, "Usage: %s <input_file> [other options]\n", argv[0]);
         return EXIT_FAILURE;
     }
+    if (argc >= 10) {
+        if (!strcmp(argv[9], "--text")) { save_binary = 0; }
+        if (!strcmp(argv[9], "--binary")) { save_binary = 1; }
+    }
     //double c1init = ((double)atoi(argv[1]))/100.0;
     //double U_s = ((double)atoi(argv[1]))/1000.0;
     // N NuRe CFL h_min sharp U_s c2init h2init
@@ -327,24 +358,32 @@ int main(int argc, char* argv[]){
     double t = 0.; // initialize time
 
     if(save_deposit || save_q || save_h || save_phi1 || save_phi2){
-        FILE *tempfile;
-        if ((tempfile = fopen(str_log, "r")))
-        {
-            // Checking if the files already exist before opening in append mode. 
-            printf("WHOA! The files already exists. This will append and mess up old data. \n Exiting now.");
-            fclose(tempfile);
-            exit(-1);
-        }
+        /* FILE *tempfile; */
+        /* if ((tempfile = fopen(str_log, "r"))) */
+        /* { */
+        /*     // Checking if the files already exist before opening in append mode. */ 
+        /*     printf("WHOA! The files already exists. This will append and mess up old data. \n Exiting now."); */
+        /*     fclose(tempfile); */
+        /*     exit(-1); */
+        /* } */
         mkdir(dir,0777); // Create a directory to store solutions and log file (the 0777 is permission allowing anyone to read, write, or edit the directory)
-        // Open all the files in append mode
-        log_file  = fopen(str_log,"a"); // open log file as one that can append (the "a")
-        if(save_h){h_file    = fopen(str_h,"a");} // open file as one that can append (the "a")
-        if(save_q){q_file    = fopen(str_q,"a");} // open file as one that can append (the "a")
-        if(save_phi1){phi1_file = fopen(str_phi1,"a");} // open file as one that can append (the "a")
-        if(save_phi2){phi2_file = fopen(str_phi2,"a");} // open file as one that can append (the "a")
-        if(save_deposit){deposit1_file    = fopen(str_deposit1,"a");} // open file as one that can append (the "a")
-        if(save_deposit){deposit2_file    = fopen(str_deposit2,"a");} // open file as one that can append (the "a")
+        log_file  = fopen(str_log,"w"); // open log file
 
+        if(save_binary){
+            if(save_h){h_file    = fopen(str_h,"wb"); write_binary_header(h_file);}
+            if(save_q){q_file    = fopen(str_q,"wb"); write_binary_header(q_file);}
+            if(save_phi1){phi1_file = fopen(str_phi1,"wb"); write_binary_header(phi1_file);}
+            if(save_phi2){phi2_file = fopen(str_phi2,"wb"); write_binary_header(phi2_file);}
+            if(save_deposit){deposit1_file    = fopen(str_deposit1,"wb"); write_binary_header(deposit1_file);}
+            if(save_deposit){deposit2_file    = fopen(str_deposit2,"wb"); write_binary_header(deposit2_file);}
+        } else {
+            if(save_h){h_file    = fopen(str_h,"w");}
+            if(save_q){q_file    = fopen(str_q,"w");}
+            if(save_phi1){phi1_file = fopen(str_phi1,"w");}
+            if(save_phi2){phi2_file = fopen(str_phi2,"w");}
+            if(save_deposit){deposit1_file    = fopen(str_deposit1,"w");}
+            if(save_deposit){deposit2_file    = fopen(str_deposit2,"w");}
+        }
         print_conserved_variables_to_file(t);
         print_params_to_log();
     }
@@ -487,12 +526,26 @@ void avg_cell(double *u, double *u_avg){
 
 
 void print_to_file(double t, double *x,FILE *hist2){
-    fprintf(hist2,"%3.10f ",t);
     int i;
-    for(i=0;i<N;i++){
-        if((i+J_save/2)%J_save==0){fprintf(hist2,"%3.10f ",x[i]);}
+    if(save_binary){
+        int j = 0;
+        // Pack one complete saved row, then write it in one call.
+        save_row[j++] = t;
+        for(i=0;i<N;i++){
+            if((i+J_save/2)%J_save==0){
+                save_row[j++] = x[i];
+            }
+        }
+        fwrite(save_row, sizeof(double), save_row_len, hist2);
+    } else {
+        fprintf(hist2,"%3.10f ",t);
+        for(i=0;i<N;i++){
+            if((i+J_save/2)%J_save==0){
+                fprintf(hist2,"%3.10f ",x[i]);
+            }
+        }
+        fprintf(hist2,"\n");
     }
-    fprintf(hist2,"\n");
 }
 
 void print_conserved_variables_to_file(double t){
@@ -598,6 +651,8 @@ void pointers (){
 
     deposit1 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit1
     deposit2 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit2
+    save_row_len = 1 + saved_point_count();
+    save_row = malloc(save_row_len*sizeof(double));
 }
 
 
@@ -609,6 +664,7 @@ void unpointers (){
     free(phi1); free(phi1_); free(phi1_temp1); free(phi1_temp2); free(phi1L); free(phi1R);
     free(phi2); free(phi2_); free(phi2_temp1); free(phi2_temp2); free(phi2L); free(phi2R);
     free(deposit1); free(deposit2);
+    free(save_row);
 }
 
 void print_usage(const char *prog) {
@@ -631,6 +687,9 @@ void print_usage(const char *prog) {
     printf("  arg6 U_s \n");
     printf("  arg7 c2init \n");
     printf("  arg8 h2init \n\n");
+    printf("Format options:\n");
+    printf("  --binary  Save output in binary format (default)\n");
+    printf("  --text    Save output in base-10 text format\n\n");
     printf("Options:\n");
     printf("  -h, --help   Show this help message\n\n");
 }

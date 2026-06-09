@@ -16,6 +16,7 @@ from copy import deepcopy
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time
+import struct
 from scipy.ndimage import gaussian_filter1d
 
 """
@@ -161,6 +162,35 @@ class TurbiditySim:
                     self.coll_loc = float(line[line.find('=')+1:])
 
     def unpack(self, whichVars):
+        def load_series_file(whichFile):
+            path = self.rootFile + self.subFile + self.fileName + '/' + whichFile
+            with open(path, 'rb') as fh:
+                header = fh.read(8)
+                if header == b'TCWENO1\x00':
+                    version = struct.unpack('<I', fh.read(4))[0]
+                    if version != 1:
+                        raise ValueError(f'Unsupported binary file version {version} in {path}')
+                    n = struct.unpack('<I', fh.read(4))[0]
+                    j_save = struct.unpack('<I', fh.read(4))[0]
+                    n_saved = struct.unpack('<I', fh.read(4))[0]
+                    row_len = struct.unpack('<I', fh.read(4))[0]
+                    if row_len != n_saved + 1:
+                        raise ValueError(f'Corrupt binary header in {path}')
+                    payload = fh.read()
+                    payload_len = len(payload) - (len(payload) % 8)
+                    if payload_len != len(payload):
+                        payload = payload[:payload_len]
+                    raw = np.frombuffer(payload, dtype=np.dtype('<f8'))
+                    usable = (raw.size // row_len) * row_len
+                    if usable != raw.size:
+                        print(f"Warning: truncating incomplete final row in {path}")
+                        raw = raw[:usable]
+                    # if raw.size % row_len != 0:
+                    #     raise ValueError(f'Binary payload length mismatch in {path}')
+                    A = raw.reshape((-1, row_len))
+                    return A
+            return np.loadtxt(path)
+
         def single_unpack(whichFile):
             """
             Argument is the file name of the data
@@ -171,9 +201,9 @@ class TurbiditySim:
             Removing the first column and first row you are left with a matrix of the function values (rows are time slices)
             """
             if whichFile in char_vars:
-                A = np.loadtxt(self.rootFile + self.subFile + self.fileName + '/' + char_to_cons[whichFile])
+                A = load_series_file(char_to_cons[whichFile])
             else:
-                A = np.loadtxt(self.rootFile + self.subFile + self.fileName + '/' + whichFile)
+                A = load_series_file(whichFile)
             self.x = A[0,1:]
             self.T = A[1:,0]
             DependentVariable = A[1:,1:]
