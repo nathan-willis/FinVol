@@ -45,7 +45,7 @@ double U_s;
 
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/cleanup3_binaryBuffer"
+#define subfile "sims/cleanup4_nonrecursiveBCTwowza"
 
 int save_q = 1; //Decide if you want to save to a file or not.
 int save_h = 1; //Decide if you want to save to a file or not.
@@ -129,8 +129,9 @@ static inline void write_binary_header(FILE *f){
 // These are functions called in the while loop. 
 //int BC(int aa);
 static inline int BC(int aa){
-    if(aa<0){return BC(aa+N);}
-    else{return aa%N;}
+    return (aa+N)%N;
+    /* if(aa<0){return BC(aa+N);} */
+    /* else{return aa%N;} */
 }
 //double diff(double *u,int i,int which);
 static inline double diff(double *u,int i,int which){
