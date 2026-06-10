@@ -50,9 +50,16 @@ typedef enum {
     REFLECTIVE = 2
 } BCType;
 
+typedef struct {
+    double h;
+    double q;
+    double phi1;
+    double phi2;
+} Flux4;
+
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/cleanup5_ghostPray"
+#define subfile "sims/cleanup6_discreteSpatialPeclet"
 static BCType bc_type = PERIODIC; 
 
 int save_q = 1; //Decide if you want to save to a file or not.
@@ -84,14 +91,15 @@ double *h_; // Declaring pointer to vector of nodal points for h
 double *h; // Declaring pointer to vector of cell averages for h
 double *h_temp1;// Declaring pointer to temporary h vector for RK3
 double *h_temp2;// Declaring pointer to temporary h vector for RK3
-double *hL;// Declaring pointer to left h vector for WENO and input of Lax-Friedrichs flux
-double *hR;// Declaring pointer to right h vector for WENO and input of Lax-Friedrichs flux
+double *hL;// Declaring pointer to left h vector for WENO and input of flux
+double *hR;// Declaring pointer to right h vector for WENO and input of flux
 // Doing all the same declarations above, but now for q, which is hu or (height)(velocity)
 double *q_,*q,*q_temp1,*q_temp2,*qL,*qR;
 // Doing all the same declarations above, but now for phi1, which is (height)(concentration 1)
 double *phi1_,*phi1,*phi1_temp1,*phi1_temp2,*phi1L,*phi1R;
 // Doing all the same declarations above, but now for phi2, which is (height)(concentration 2)
 double *phi2_,*phi2,*phi2_temp1,*phi2_temp2,*phi2L,*phi2R;
+Flux4 *F; // Declaring pointer to flux struct
 double *deposit1,*deposit2;
 
 FILE *h_file,*q_file,*phi1_file,*phi2_file,*deposit1_file,*deposit2_file,*log_file; // Variable identifying a file
@@ -135,7 +143,7 @@ static inline void write_binary_header(FILE *f){
     fwrite(&row_len, sizeof(row_len), 1, f);
 }
 // These are functions called in the while loop. 
-//int BC(int aa);
+// BOUNDARY CONDITIONS
 static inline int BC(int aa){
     switch(bc_type){
         case PERIODIC:
@@ -153,14 +161,10 @@ static inline int BC(int aa){
             exit(EXIT_FAILURE);
     }
 }
-/* static inline int BC(int aa){ */
-/*     return (aa+N)%N; */
-/*     /1* if(aa<0){return BC(aa+N);} *1/ */
-/*     /1* else{return aa%N;} *1/ */
-/* } */
 
-// Fill ghost cells
+// GHOST CELLS
 static inline void fill_ghost_cells(double *u_){
+    /* Fill ghost cells */
     int i;
     for(i=0;i<ng;i++){
         u_[i] = u_[BC(i-ng)+ng];
@@ -169,6 +173,7 @@ static inline void fill_ghost_cells(double *u_){
 }
 
 static inline void run_fill_ghost_cells(double *hh, double *qq, double *pphi1, double *pphi2){
+    /* Fill the ghost cells on all 4 variables */
     fill_ghost_cells(hh);
     fill_ghost_cells(qq);
     fill_ghost_cells(pphi1);
@@ -185,46 +190,90 @@ static inline double diff(double *u,int i,int which){
     if(which == 1){diff_const = 1./NuPe;}
     return diff_const*(1./(*dx*(*dx)))*(u[i-3]*d_co[3] + u[i-2]*d_co[2] + u[i-1]*d_co[1] + u[i]*d_co[0] + u[i+1]*d_co[1] + u[i+2]*d_co[2] + u[i+3]*d_co[3]);
 }
-//double flux(double h, double q, double phi1, double phi2, int which);
-static inline double flux(double h, double q, double phi1, double phi2, int which){
-    if(which == 0){return q ;}
-    if(which == 1){return q*q/h + h*phi1/(2*FrSquared) + h*phi2/(2*FrSquared) ;}
-    if(which == 2){return phi1*q/h ;}
-    if(which == 3){return phi2*q/h ;}
-    printf("Did something weird in flux");
-    return 10000000.;
+
+// FLUX
+static inline Flux4 physical_flux(double h, double q, double phi1, double phi2){
+    Flux4 f;
+    f.h    = q ;
+    f.q    = q*q/h + h*phi1/(2*FrSquared) + h*phi2/(2*FrSquared) ;
+    f.phi1 = phi1*q/h ;
+    f.phi2 = phi2*q/h ;
+    return f;
     }
-//double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which);
-static inline double F_HLL(double h_l, double h_r, double q_l, double q_r, double phi1_l, double phi1_r, double phi2_l, double phi2_r, int which){
+
+static inline Flux4 numerical_flux(
+        double h_l,
+        double h_r,
+        double q_l,
+        double q_r, 
+        double phi1_l,
+        double phi1_r,
+        double phi2_l,
+        double phi2_r 
+        ){
     double sp;
     double sm;
-    double whichVar[4] = {h_r-h_l,q_r-q_l,phi1_r-phi1_l,phi2_r-phi2_l};
-    sp =         q_r/h_r + sqrt((phi1_r+phi2_r)/FrSquared);
-    sp = fmax(sp,q_r/h_r);
-    sp = fmax(sp,q_r/h_r - sqrt((phi1_r+phi2_r)/FrSquared));
-    sp = fmax(sp,q_l/h_l + sqrt((phi1_l+phi2_l)/FrSquared));
-    sp = fmax(sp,q_l/h_l);
-    sp = fmax(sp,q_l/h_l - sqrt((phi1_l+phi2_l)/FrSquared));
-    sm =         q_l/h_l + sqrt((phi1_l+phi2_l)/FrSquared);
-    sm = fmin(sm,q_l/h_l);
-    sm = fmin(sm,q_l/h_l - sqrt((phi1_l+phi2_l)/FrSquared));
-    sm = fmin(sm,q_r/h_r + sqrt((phi1_r+phi2_r)/FrSquared));
-    sm = fmin(sm,q_r/h_r);
-    sm = fmin(sm,q_r/h_r - sqrt((phi1_r+phi2_r)/FrSquared));
+    double u_r = q_r/h_r;
+    double u_l = q_l/h_l;
+    double s_r = sqrt((phi1_r+phi2_r)/FrSquared);
+    double s_l = sqrt((phi1_l+phi2_l)/FrSquared);
+    sp =         u_r + s_r;
+    sp = fmax(sp,u_r      );
+    sp = fmax(sp,u_r - s_r);
+    sp = fmax(sp,u_l + s_l);
+    sp = fmax(sp,u_l      );
+    sp = fmax(sp,u_l - s_l);
 
-    if(sm >=0.){return flux(h_l,q_l,phi1_l,phi2_l,which);}
-    if(sp <=0.){return flux(h_r,q_r,phi1_r,phi2_r,which);}
-    return (sp*flux(h_l,q_l,phi1_l,phi2_l,which) - sm*flux(h_r,q_r,phi1_r,phi2_r,which) + sp*sm*whichVar[which])/(sp-sm);
-    printf("Did something weird in F_HLL");
-    return 10000000.;
+    sm =         u_l + s_l;
+    sm = fmin(sm,u_l      );
+    sm = fmin(sm,u_l - s_l);
+    sm = fmin(sm,u_r + s_r);
+    sm = fmin(sm,u_r      );
+    sm = fmin(sm,u_r - s_r);
+
+    if(sm >=0.){return physical_flux(h_l,q_l,phi1_l,phi2_l);}
+    if(sp <=0.){return physical_flux(h_r,q_r,phi1_r,phi2_r);}
+    // Below, I tried to save a miniscule computation by precomputing the 
+    // reciprocal of sp-sm and multiplying that to the fluxes. 
+    // WARNING! This caused the solution to blow up. 
+    // double hll_den = 1.0/(sp-sm); 
+    Flux4 f_l = physical_flux(h_l,q_l,phi1_l,phi2_l);
+    Flux4 f_r = physical_flux(h_r,q_r,phi1_r,phi2_r);
+    Flux4 f;
+    f.h    = (sp*f_l.h    - sm*f_r.h    + sp*sm*(h_r    - h_l   ))/(sp-sm);
+    f.q    = (sp*f_l.q    - sm*f_r.q    + sp*sm*(q_r    - q_l   ))/(sp-sm);
+    f.phi1 = (sp*f_l.phi1 - sm*f_r.phi1 + sp*sm*(phi1_r - phi1_l))/(sp-sm);
+    f.phi2 = (sp*f_l.phi2 - sm*f_r.phi2 + sp*sm*(phi2_r - phi2_l))/(sp-sm);
+    return f;
 }
-//double DiscreteSpatial(int i, int which);
-static inline double DiscreteSpatial(int i, int which){
-    // the index i has already been shifted by the ghost_cells
-    return F_HLL(hL[i],hR[i+1],qL[i],qR[i+1],phi1L[i],phi1R[i+1],phi2L[i],phi2R[i+1],which) - 
-           F_HLL(hL[i-1],hR[i],qL[i-1],qR[i],phi1L[i-1],phi1R[i],phi2L[i-1],phi2R[i],which);
+
+static inline void precompute_fluxes(
+        const double *hL,    const double *hR,
+        const double *qL,    const double *qR,
+        const double *phi1L, const double *phi1R,
+        const double *phi2L, const double *phi2R,
+        Flux4 *F
+        ){
+    int i;
+    for(i=0;i<N+1;i++){
+        F[i] = numerical_flux(
+                hL[i+ng-1], hR[i+ng], 
+                qL[i+ng-1], qR[i+ng], 
+                phi1L[i+ng-1], phi1R[i+ng], 
+                phi2L[i+ng-1], phi2R[i+ng]
+                );
+    }
 }
-//void WENO(double *u_, double *u_left,double *u_right);
+
+static inline Flux4 flux_divergence_at(int i, const Flux4 *F){
+    Flux4 dF;
+    dF.h    = F[i+1].h    - F[i].h;
+    dF.q    = F[i+1].q    - F[i].q;
+    dF.phi1 = F[i+1].phi1 - F[i].phi1;
+    dF.phi2 = F[i+1].phi2 - F[i].phi2;
+    return dF;
+}
+
 static inline void WENO(double *u_, double *u_left,double *u_right){
     // WENO constants
     double beta[2][3] = {{3./10.,3./5.,1./10.},{1./10.,3./5.,3./10.}};
@@ -239,34 +288,11 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
     double c1 = 13./12.;
     double c2 = 0.25;
     for(i=0;i<N;i++){
-        int im2 = i-2+ng;
-        int im1 = i-1+ng;
-        int ip1 = i+1+ng;
-        int ip2 = i+2+ng;
-
-        double uim2 = u_[im2];
-        double uim1 = u_[im1];
+        double uim2 = u_[i-2+ng];
+        double uim1 = u_[i-1+ng];
         double ui   = u_[i+ng];
-        double uip1 = u_[ip1];
-        double uip2 = u_[ip2];
-
-        /* double a0 = ui - 2.*uip1 + uip2; */
-        /* double b0 = 3.*ui - 4.*uip1 + uip2; */
-        /* gamma[0] = c1*(a0)*(a0) + c2*(b0)*(b0); */
-
-        /* double a1 = uim1 - 2.*ui + uip1; */
-        /* double b1 = uim1 - uip1; */
-        /* gamma[1] = c1*(a1)*(a1) + c2*(b1)*(b1); */
-
-        /* double a2 = uim2 - 2.*uim1 + ui; */
-        /* double b2 = uim2 - 4.*uim1 + 3.*ui; */
-        /* gamma[2] = c1*(a2)*(a2) + c2*(b2)*(b2); */
-
-        /* double uim2 = u_[BC(i-2)]; */
-        /* double uim1 = u_[BC(i-1)]; */
-        /* double ui   = u_[i]; */
-        /* double uip1 = u_[BC(i+1)]; */
-        /* double uip2 = u_[BC(i+2)]; */
+        double uip1 = u_[i+1+ng];
+        double uip2 = u_[i+2+ng];
 
         double t0 = ui - 2.*uip1 + uip2;
         double t1 = 3.*ui - 4.*uip1 + uip2;
@@ -279,10 +305,6 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
         t0 = uim2 - 2.*uim1 + ui;
         t1 = uim2 - 4.*uim1 + 3.*ui;
         gamma[2] = c1*(t0)*(t0) + c2*(t1)*(t1);
-
-        /* gamma[0] = c1*(ui - 2.*uip1 + uip2)*(ui - 2.*uip1 + uip2) + c2*(3.*ui - 4.*uip1 + uip2)*(3.*ui - 4.*uip1 + uip2); */
-        /* gamma[1] = c1*(uim1 - 2.*ui + uip1)*(uim1 - 2.*ui + uip1) + c2*(uim1 - uip1)*(uim1 - uip1); */
-        /* gamma[2] = c1*(uim2 - 2.*uim1 + ui)*(uim2 - 2.*uim1 + ui) + c2*(uim2 - 4.*uim1 + 3.*ui)*(uim2 - 4.*uim1 + 3.*ui); */
 
         for(r=0;r<m;r++){
             u_l[r] = C[r+1][0]*u_[i-r+ng] + C[r+1][1]*u_[i+1-r+ng] + C[r+1][2]*u_[i+2-r+ng];
@@ -311,7 +333,7 @@ static inline void WENO(double *u_, double *u_left,double *u_right){
         }
     }
 }
-//void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2);
+
 static inline void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2){
     WENO(hh,hL,hR); // Perform WENO to get uL and uR from the last solution vector of cell averages
     WENO(qq,qL,qR); // Perform WENO to get uL and uR from the last solution vector of cell averages
@@ -320,17 +342,17 @@ static inline void run_WENO(double *hh, double *qq, double *pphi1, double *pphi2
     run_fill_ghost_cells(hL,qL,phi1L,phi2L);
     run_fill_ghost_cells(hR,qR,phi1R,phi2R);
 }
-//int max_fct(int aa, int bb);
+
 static inline int max_fct(int aa, int bb){
     if(aa>bb){return aa;}
     else{return bb;}
 }
-//int min_fct(int aa, int bb);
+
 static inline int min_fct(int aa, int bb){
     if(aa>bb){return bb;}
     else{return aa;}
 }
-//void collision_check();
+
 static inline void collision_check(){
     int i;
     int phi1_right = 0;
@@ -446,27 +468,33 @@ int main(int argc, char* argv[]){
         }
         run_fill_ghost_cells(h,q,phi1,phi2);
         run_WENO(h,q,phi1,phi2);
+        precompute_fluxes(hL, hR, qL, qR, phi1L, phi1R, phi2L, phi2R, F);
         for(i=0;i<N;i++){
-            h_temp1[i+ng]    = h[i+ng]    - k/(*dx)*DiscreteSpatial(i+ng,0) + k*diff(h,i+ng,0); // First step of RK2
-            q_temp1[i+ng]    = q[i+ng]    - k/(*dx)*DiscreteSpatial(i+ng,1) + k*diff(q,i+ng,0);// First step of RK2
-            phi1_temp1[i+ng] = phi1[i+ng] - k*(U_s*phi1[i+ng]/h[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + k*diff(phi1,i+ng,1);// First step of RK2
-            phi2_temp1[i+ng] = phi2[i+ng] - k*(U_s*phi2[i+ng]/h[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + k*diff(phi2,i+ng,1);// First step of RK2
+            Flux4 dF = flux_divergence_at(i, F); // This is on the CELL index, not the ghost cells, so index i is correct. 
+            h_temp1[i+ng]    = h[i+ng]    - k/(*dx)*dF.h + k*diff(h,i+ng,0); // First step of RK2
+            q_temp1[i+ng]    = q[i+ng]    - k/(*dx)*dF.q + k*diff(q,i+ng,0);// First step of RK2
+            phi1_temp1[i+ng] = phi1[i+ng] - k*(U_s*phi1[i+ng]/h[i+ng] + dF.phi1/(*dx)) + k*diff(phi1,i+ng,1);// First step of RK2
+            phi2_temp1[i+ng] = phi2[i+ng] - k*(U_s*phi2[i+ng]/h[i+ng] + dF.phi2/(*dx)) + k*diff(phi2,i+ng,1);// First step of RK2
         }
         run_fill_ghost_cells(h_temp1,q_temp1,phi1_temp1,phi2_temp1);
         run_WENO(h_temp1,q_temp1,phi1_temp1,phi2_temp1);
+        precompute_fluxes(hL, hR, qL, qR, phi1L, phi1R, phi2L, phi2R, F);
         for(i=0;i<N;i++){
-            h_temp2[i+ng]    = 3./4.*h[i+ng]    + 1./4.*h_temp1[i+ng]    - k/(4.*(*dx))*DiscreteSpatial(i+ng,0) + (1./4.)*k*diff(h_temp1,i+ng,0);
-            q_temp2[i+ng]    = 3./4.*q[i+ng]    + 1./4.*q_temp1[i+ng]    - k/(4.*(*dx))*DiscreteSpatial(i+ng,1) + (1./4.)*k*diff(q_temp1,i+ng,0);
-            phi1_temp2[i+ng] = 3./4.*phi1[i+ng] + 1./4.*phi1_temp1[i+ng] - k/4.*(U_s*phi1_temp1[i+ng]/h_temp1[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + (1./4.)*k*diff(phi1_temp1,i+ng,1);
-            phi2_temp2[i+ng] = 3./4.*phi2[i+ng] + 1./4.*phi2_temp1[i+ng] - k/4.*(U_s*phi2_temp1[i+ng]/h_temp1[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + (1./4.)*k*diff(phi2_temp1,i+ng,1);
+            Flux4 dF = flux_divergence_at(i, F); // This is on the CELL index, not the ghost cells, so index i is correct. 
+            h_temp2[i+ng]    = 3./4.*h[i+ng]    + 1./4.*h_temp1[i+ng]    - k/(4.*(*dx))*dF.h + (1./4.)*k*diff(h_temp1,i+ng,0);
+            q_temp2[i+ng]    = 3./4.*q[i+ng]    + 1./4.*q_temp1[i+ng]    - k/(4.*(*dx))*dF.q + (1./4.)*k*diff(q_temp1,i+ng,0);
+            phi1_temp2[i+ng] = 3./4.*phi1[i+ng] + 1./4.*phi1_temp1[i+ng] - k/4.*(U_s*phi1_temp1[i+ng]/h_temp1[i+ng] + dF.phi1/(*dx)) + (1./4.)*k*diff(phi1_temp1,i+ng,1);
+            phi2_temp2[i+ng] = 3./4.*phi2[i+ng] + 1./4.*phi2_temp1[i+ng] - k/4.*(U_s*phi2_temp1[i+ng]/h_temp1[i+ng] + dF.phi2/(*dx)) + (1./4.)*k*diff(phi2_temp1,i+ng,1);
         }
         run_fill_ghost_cells(h_temp2,q_temp2,phi1_temp2,phi2_temp2);
         run_WENO(h_temp2,q_temp2,phi1_temp2,phi2_temp2);
+        precompute_fluxes(hL, hR, qL, qR, phi1L, phi1R, phi2L, phi2R, F);
         for(i=0;i<N;i++){
-            h[i+ng]    = h[i+ng]/3.    + 2./3.*h_temp2[i+ng]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i+ng,0) + (2./3.)*k*diff(h_temp2,i+ng,0); // Second step of RK2
-            q[i+ng]    = q[i+ng]/3.    + 2./3.*q_temp2[i+ng]    - 2.*k/(3.*(*dx))*DiscreteSpatial(i+ng,1) + (2./3.)*k*diff(q_temp2,i+ng,0); // Second step of RK2
-            phi1[i+ng] = phi1[i+ng]/3. + 2./3.*phi1_temp2[i+ng] - 2.*k/3.*(U_s*phi1_temp2[i+ng]/h_temp2[i+ng] + DiscreteSpatial(i+ng,2)/(*dx)) + (2./3.)*k*diff(phi1_temp2,i+ng,1); // Second step of RK2
-            phi2[i+ng] = phi2[i+ng]/3. + 2./3.*phi2_temp2[i+ng] - 2.*k/3.*(U_s*phi2_temp2[i+ng]/h_temp2[i+ng] + DiscreteSpatial(i+ng,3)/(*dx)) + (2./3.)*k*diff(phi2_temp2,i+ng,1); // Second step of RK2
+            Flux4 dF = flux_divergence_at(i, F); // This is on the CELL index, not the ghost cells, so index i is correct. 
+            h[i+ng]    = h[i+ng]/3.    + 2./3.*h_temp2[i+ng]    - 2.*k/(3.*(*dx))*dF.h + (2./3.)*k*diff(h_temp2,i+ng,0); // Second step of RK2
+            q[i+ng]    = q[i+ng]/3.    + 2./3.*q_temp2[i+ng]    - 2.*k/(3.*(*dx))*dF.q + (2./3.)*k*diff(q_temp2,i+ng,0); // Second step of RK2
+            phi1[i+ng] = phi1[i+ng]/3. + 2./3.*phi1_temp2[i+ng] - 2.*k/3.*(U_s*phi1_temp2[i+ng]/h_temp2[i+ng] + dF.phi1/(*dx)) + (2./3.)*k*diff(phi1_temp2,i+ng,1); // Second step of RK2
+            phi2[i+ng] = phi2[i+ng]/3. + 2./3.*phi2_temp2[i+ng] - 2.*k/3.*(U_s*phi2_temp2[i+ng]/h_temp2[i+ng] + dF.phi2/(*dx)) + (2./3.)*k*diff(phi2_temp2,i+ng,1); // Second step of RK2
         }
         if(!collision){
             CT = t; 
@@ -699,6 +727,8 @@ void pointers (){
     phi2L = malloc((N+2*ng)*sizeof(double));
     phi2R = malloc((N+2*ng)*sizeof(double));
 
+    F = malloc((N+1)*sizeof(Flux4));
+
     deposit1 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit1
     deposit2 = malloc((N)*sizeof(double)); // Declaring pointer to vector of cell averages for deposit2
     save_row_len = 1 + saved_point_count();
@@ -713,6 +743,7 @@ void unpointers (){
     free(q); free(q_); free(q_temp1); free(q_temp2); free(qL); free(qR);
     free(phi1); free(phi1_); free(phi1_temp1); free(phi1_temp2); free(phi1L); free(phi1R);
     free(phi2); free(phi2_); free(phi2_temp1); free(phi2_temp2); free(phi2L); free(phi2R);
+    free(F);
     free(deposit1); free(deposit2);
     free(save_row);
 }
