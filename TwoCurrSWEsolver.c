@@ -5,6 +5,8 @@
 #include<sys/stat.h>
 #include<time.h>
 #include<string.h>
+#include<unistd.h>
+#include <sys/utsname.h>
 //#include "TwoCurrTestValues.h"
 //#include "utility_fns.h"
 
@@ -25,7 +27,7 @@ double c2init, h2init;
 // Physical parameters
 #define a -70. // lower bound of the interval
 #define b 70.  // upper bound of the interval
-#define T 40. // Final Time
+#define T 4. // Final Time
 #define FrSquared 1.0 // Froude number
 //#define U_s 0.00 // Settling speed
 //double U_s = 0.0;
@@ -59,7 +61,7 @@ typedef struct {
 
 // File information
 #define fileprefix "benchmark/"
-#define subfile "sims/cleanup6_discreteSpatialPeclet"
+#define subfile "sims/logupdate"
 static BCType bc_type = PERIODIC; 
 
 int save_q = 1; //Decide if you want to save to a file or not.
@@ -118,6 +120,7 @@ void print_date_time();
 void pointers ();
 void unpointers ();
 void print_usage(const char *prog);
+static const char *bc_type_to_string(BCType type);
 
 
 static inline int saved_point_count(void){
@@ -545,13 +548,14 @@ int main(int argc, char* argv[]){
     double runTime = (clock()-time_check)/CLOCKS_PER_SEC;
     printf("%0.8f",runTime);
     if(save_deposit || save_q || save_h || save_phi1 || save_phi2){
-        fprintf(log_file,"\nCollision detected: %i", collision);
+        fprintf(log_file,"\n    Simulation Results \n \n");
+        fprintf(log_file,"Collision detected: %i", collision);
         if(collision){
             fprintf(log_file,"\ncollision time: CT=%0.16f",CT);
             fprintf(log_file,"\ncollision index: CI=%5.1f",CI);
             fprintf(log_file,"\ncollision position: CX=%0.16f",CX);
         }
-        fprintf(log_file,"\n\nRun time was %.4f seconds.",runTime);
+        fprintf(log_file,"\n\nRun time was %.4f seconds.\n\n",runTime);
         fclose(log_file);
     }
     if(save_h){fclose(h_file);}
@@ -648,14 +652,47 @@ void print_conserved_variables_to_file(double t){
 }
 
 void print_params_to_log(){
+    char host[256] = "unknown";
+    char cwd[1024] = "unknown";
+    struct utsname sysinfo;
+
+    if(gethostname(host, sizeof(host)) != 0){
+        strcpy(host, "unknown");
+    } else {
+        host[sizeof(host) - 1] = '\0';
+    }
+
+    if(getcwd(cwd, sizeof(cwd)) == NULL){
+        strcpy(cwd, "unknown");
+    }
+
     print_date_time();
+    fprintf(log_file,"Host = %s\n",host);
+    if(uname(&sysinfo) == 0){
+        fprintf(log_file,"System = %s %s %s\n",sysinfo.sysname,sysinfo.release,sysinfo.machine);
+    } else {
+        fprintf(log_file,"System = unknown\n");
+    }
+    fprintf(log_file,"Working directory = %s\n",cwd);
+    
+    // Output parameters
+    fprintf(log_file,"\n    Output Parameters \n \n");
+    fprintf(log_file,"Boundary condition = %s\n",bc_type_to_string(bc_type));
+    fprintf(log_file,"Output format = %s\n",save_binary ? "binary" : "text");
+    fprintf(log_file,"J_save = %i\n",J_save);
+    fprintf(log_file,"print_when = %0.5f\n",print_when);
+
+
     // Numerical parameters 
-    fprintf(log_file,"    Numerical Parameters \n \n");
+    fprintf(log_file,"\n    Numerical Parameters \n \n");
     fprintf(log_file,"N=%i, N+1 node, N cells\n",N);
     fprintf(log_file,"Numerical Reynolds = %4.0f\n",NuRe);
     fprintf(log_file,"Numerical Peclet = %4.0f\n",NuPe);
     fprintf(log_file,"h_min = %0.5f, minimum height for SWE\n",h_min);
     fprintf(log_file,"CFL = %0.5f\n",CFL);
+    fprintf(log_file,"WENO stencil, m = %i\n",m);
+    fprintf(log_file,"WENO accuracy, 2m-1 = %i\n",2*m-1);
+    fprintf(log_file,"Number of ghost cells, ng = %i\n",ng);
     
     // Physical parameters
     fprintf(log_file,"\n    Physical Parameters \n \n");
@@ -669,10 +706,10 @@ void print_params_to_log(){
     fprintf(log_file,"\n    Initial Conditions Parameters \n \n");
     fprintf(log_file,"h1init = %0.2f, initial height of left current\n",h1init);
     fprintf(log_file,"c1init = %0.2f, initial concentration of left current\n",c1init);
-    fprintf(log_file,"cur1wid = %0.2f, initial width of left current\n",c1init);
+    fprintf(log_file,"cur1wid = %0.2f, initial width of left current\n",cur1wid);
     fprintf(log_file,"h2init = %0.2f, initial height of right current\n",h2init);
     fprintf(log_file,"c2init = %0.2f, initial concentration of right current\n",c2init);
-    fprintf(log_file,"cur2wid = %0.2f, initial width of right current\n",c1init);
+    fprintf(log_file,"cur2wid = %0.2f, initial width of right current\n",cur2wid);
     fprintf(log_file,"apart = %0.2f, initial distance between centers of the currents\n",apart);
     fprintf(log_file,"sharp = %4.0f, sharpness parameter for hyperbolic tangent\n",sharp);
 }
@@ -690,7 +727,16 @@ void print_date_time(){
     else{
         c_time_string = ctime(&current_time);// Convert to local time format.
         if (c_time_string == NULL){fprintf(log_file, "Failure to convert the current time.\n");}
-        else{fprintf(log_file,"Current time is %s\n", c_time_string);}// Print to stdout. ctime() has already added a terminating newline character.
+        else{fprintf(log_file,"\nCurrent time is %s\n", c_time_string);}// Print to stdout. ctime() has already added a terminating newline character.
+    }
+}
+
+static const char *bc_type_to_string(BCType type){
+    switch(type){
+        case PERIODIC:   return "PERIODIC";
+        case OUTFLOW:    return "OUTFLOW";
+        case REFLECTIVE: return "REFLECTIVE";
+        default:         return "UNKNOWN";
     }
 }
 
