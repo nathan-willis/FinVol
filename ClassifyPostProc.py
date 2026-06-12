@@ -565,6 +565,29 @@ class TurbiditySim:
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.pdf',dpi=1000)
         if close: plt.close()
 
+    def deposit_pcolor(self,xb=20,d_max=None):
+        horiz_mask = (self.x>=-xb) & (self.x<=xb)
+        d1 = self.d1[:,horiz_mask]
+        d2 = self.d2[:,horiz_mask]
+        d_total = d1+d2
+        x = self.x[horiz_mask]
+        if d_max is None:
+            d_max =  np.max(d1+d2)
+
+
+        d_pct = np.divide(d2,d_total, out=np.zeros_like(d2), where = d_total!=0)
+        d = np.linspace(0,d_max,self.T.shape[0]*2)
+
+        P = np.full((len(d),len(x)),np.nan)
+        for j in range(len(x)):
+            h = d_total[:,j]
+            idx = np.searchsorted(h, d, side='right')
+            valid = idx < len(h)
+            P[valid,j] = d_pct[idx[valid],j]
+
+        plt.pcolormesh(x,d,np.ma.masked_invalid(P),cmap='PRGn_r', rasterized=True)
+        plt.plot(x,d_total[-1,:],color = 'k', linewidth=1)
+
     def plot_encroachment(self,wantLegend=True, want_y_label=True):
         try:
             self.encroachment_mass
@@ -1330,51 +1353,14 @@ class TurbiditySim:
         plt.xlabel('time')
         plt.ylabel('concentration')
 
-def deposit_pcolor(self,xb=20,d_max=None):
-    horiz_mask = (self.x>=-xb) & (self.x<=xb)
-    d1 = self.d1[:,horiz_mask]
-    d1[d1<0] = 0
-    d2 = self.d2[:,horiz_mask]
-    d2[d2<0] = 0
-    d_total = d1+d2
-    x = self.x[horiz_mask]
-    if d_max is None:
-        d_max =  np.max(d1+d2)
-
-
-    d_pct = np.divide(d2,d_total, out=np.zeros_like(d2), where = d_total!=0)
-    d = np.linspace(0,d_max,self.T.shape[0]*2)
-
-    def old_method():
-        _,D = np.meshgrid(x,d)
-        nz_d = d_total.nonzero()
-        d_pct[nz_d] = d2[nz_d]/(d_total[nz_d])
-
-        P = np.full((len(d),len(x)),np.nan)
-
-        for i in range(d_pct.shape[0]-1,-1,-1):
-            valid_deposit = D<d_total[i,:]
-            P[valid_deposit] = np.full(P.shape,d_pct[i,:])[valid_deposit]
-        return P
-
-    def new_method():
-        P = np.full((len(d),len(x)),np.nan)
-        for j in range(len(x)):
-            h = np.maximum.accumulate(d_total[:,j])
-            idx = np.searchsorted(h, d, side='right')
-            valid = idx < len(h)
-            P[valid,j] = d_pct[idx[valid],j]
-        return P
-
-    return x, d, d_pct, d_total, old_method(), new_method()
-
 def Deposit_Results(
         SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],
         SimPack=None,
         U_s=0.01,
-        rootFile = 'Jun11_DepositionExamplePlots/',
+        rootFile = 'Jun12_DepositionExamplePlots/',
         N=28000,sharp=200,finalTime=40.,
-        save=True,subplot=True,dt_plot = 0.1
+        save=True,subplot=True,dt_plot = 0.1,
+        xb = 20,
 ):
 
     if SimPack == None:
@@ -1394,6 +1380,7 @@ def Deposit_Results(
         yMax = max(yMax,np.max(D))
     print(yMax)
 
+    label_list = ['a','b','c','d','e','f','g','h']
     if subplot:
         article_params()
         fig = plt.figure(figsize = [5.125,4])
@@ -1402,21 +1389,35 @@ def Deposit_Results(
             print(len(Sims),1,i+1)
             ax = plt.subplot(len(Sims),1,i+1)
             axes.append(ax)
-            coll.plot_deposit_gradient(
-                dt_plot=dt_plot,
-                show=False,
-                save=False,
-                xb=20,
-                yb=yMax,
-                cb = False,
-                close=False,
-                title=False,
-                subplot=True
-            )
-            plt.plot(no_coll.x, no_coll.d2[-1,:] + LeftCurr_d1, label = 'No Collision')
-            if i ==0: plt.legend()
+            coll.deposit_pcolor(xb=xb,d_max=yMax)
+            # coll.plot_deposit_gradient(
+            #     dt_plot=dt_plot,
+            #     show=False,
+            #     save=False,
+            #     xb=20,
+            #     yb=yMax,
+            #     cb = False,
+            #     close=False,
+            #     title=False,
+            #     subplot=True
+            # )
+            plt.plot(no_coll.x[(no_coll.x>=-xb) & (no_coll.x <= xb)], no_coll.d2[-1,(no_coll.x>=-xb) & (no_coll.x <= xb)] + LeftCurr_d1[(no_coll.x>=-xb) & (no_coll.x <= xb)], label = 'No Collision')
+            if i ==0: plt.legend(loc = 'upper right')
             if i+1 != len(Sims): ax.set_xticklabels([])
             if i+1 != len(Sims): ax.tick_params(axis='x', which='major', length=2)
+            # panel_label(ax)
+            label = f"({label_list[i]}) $h_r$={coll.hR0}, $c_r$={coll.cR0}"
+            X = ax.get_xlim()
+            Y = ax.get_ylim()
+            x_pos = X[0] + 0.01*(X[1]-X[0])
+            y_pos = Y[0] + 0.80*(Y[1]-Y[0])
+            plt.text(
+                x_pos,
+                y_pos,
+                label,
+                horizontalalignment = 'left',
+                verticalalignment = 'center',
+            )
 
         plt.xlabel('$x$')
         sm = plt.cm.ScalarMappable(cmap='PRGn_r')
@@ -1454,7 +1455,7 @@ def Deposit_Results(
         # for i in [(i+1)/10 for i in range(10)]:
         #     fig.text(i,0.05,f'{i:0.1f}',ha='center',va='center')
         #     fig.text(0.95,i,f'{i:0.1f}',ha='center',va='center')
-        if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + '.png',dpi=1000)
+        if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.pdf',dpi=1000)
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
     else:
