@@ -27,7 +27,7 @@ double c2init, h2init;
 // Physical parameters
 #define a -70. // lower bound of the interval
 #define b 70.  // upper bound of the interval
-#define T 4. // Final Time
+#define T 40. // Final Time
 #define FrSquared 1.0 // Froude number
 //#define U_s 0.00 // Settling speed
 //double U_s = 0.0;
@@ -36,10 +36,10 @@ double U_s;
 
 // Initital conditions parameters 
 #define apart 5.0 // How far apart are the centers of the current
-#define h1init 1.0
+#define h1init 0.0
 //#define h2init 1.0
 //double h2init = 0.7;
-#define c1init 1.0
+#define c1init 0.0
 //double c1init = 0.7;
 //#define c2init 1.0
 //double c2init = 0.7;
@@ -60,18 +60,18 @@ typedef struct {
 } Flux4;
 
 // File information
-#define fileprefix "benchmark/"
-#define subfile "sims/logupdate"
+#define fileprefix "Jun11_DepositionExamplePlots/"
+#define subfile "sims/OneCurrOnly_"
 static BCType bc_type = PERIODIC; 
 
-int save_q = 1; //Decide if you want to save to a file or not.
-int save_h = 1; //Decide if you want to save to a file or not.
-int save_phi1 = 1; //Decide if you want to save to a file or not.
-int save_phi2 = 1; //Decide if you want to save to a file or not.
-int save_deposit = 0; //Decide if you want to save to a file or not.
+int save_q = 0; //Decide if you want to save to a file or not.
+int save_h = 0; //Decide if you want to save to a file or not.
+int save_phi1 = 0; //Decide if you want to save to a file or not.
+int save_phi2 = 0; //Decide if you want to save to a file or not.
+int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = 0.05; // Save timestamp this often
+double print_when = 0.1; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
@@ -505,8 +505,8 @@ int main(int argc, char* argv[]){
         }
         
         for(i=0;i<N;i++){
-            deposit1[i]+=k*U_s*phi1[i+ng]/h[i+ng];
-            deposit2[i]+=k*U_s*phi2[i+ng]/h[i+ng];
+            deposit1[i]+=k*U_s*fmax(0.0,phi1[i+ng]/h[i+ng]);
+            deposit2[i]+=k*U_s*fmax(0.0,phi2[i+ng]/h[i+ng]);
         }
        
         t+=k;

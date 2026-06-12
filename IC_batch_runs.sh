@@ -1,6 +1,6 @@
 #!/bin/bash
 
-gcc -O3 -march=native -o DepositionExamplePlots_Mar3.out TwoCurrSWEsolver.c # Compile main
+gcc -O3 -march=native -o DepositionExamplePlots_Jun12.out TwoCurrSWEsolver.c # Compile main
 
 # Get batch index from first argument and set up batch_file
 batch_file="$1"
@@ -19,8 +19,8 @@ batch_file="$1"
 
 max_jobs=12 # max parallel jobs allowed
 while read param1 param2; do
-    ./DepositionExamplePlots_Mar3.out 28000 1000 0.1 0.0001 200. 0.01 $param1 $param2 &
-    echo "$param1 $param2" >> Mar3_DepositionExamplePlots/progress.log
+    ./DepositionExamplePlots_Jun12.out 28000 1000 0.1 0.0001 200. 0.01 $param1 $param2 &
+    echo "$param1 $param2" >> Jun12_DepositionExamplePlots/progress.log
     while (( $(jobs -r | wc -l) >= max_jobs )); do
       sleep 5
     done
