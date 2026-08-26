@@ -56,19 +56,31 @@ def viewing_params():
     )
 def panel_label(ax,subplot_number = None):
     label_list = ['a','b','c','d','e','f','g','h']
-    label = f"({label_list[subplot_number if subplot_number else ax.get_subplotspec().num1]})"
-    X = ax.get_xlim()
-    Y = ax.get_ylim()
-    x_pos = X[0] + 0.04*(X[1]-X[0])
-    y_pos = Y[0] + 0.80*(Y[1]-Y[0])
-    plt.text(
-        x_pos,
-        y_pos,
+    idx = subplot_number if subplot_number else ax.get_subplotspec().num1
+    label = f"({label_list[idx]})"
+
+    ax.annotate(
         label,
-        horizontalalignment = 'center',
-        verticalalignment = 'center',
+        xy=(0,1),
+        xycoords='axes fraction',
+        xytext=(4,-4),
+        textcoords='offset points',
+        ha='left',
+        va='top',
         bbox=dict(facecolor='white',alpha = 0.75,linewidth=0,boxstyle='round,pad=0.3')
     )
+    # X = ax.get_xlim()
+    # Y = ax.get_ylim()
+    # x_pos = X[0] + 0.04*(X[1]-X[0])
+    # y_pos = Y[0] + 0.80*(Y[1]-Y[0])
+    # plt.text(
+    #     x_pos,
+    #     y_pos,
+    #     label,
+    #     horizontalalignment = 'center',
+    #     verticalalignment = 'center',
+    #     bbox=dict(facecolor='white',alpha = 0.75,linewidth=0,boxstyle='round,pad=0.3')
+    # )
 viewing_params()
 tabcolors = ('tab:blue','tab:orange','tab:green','tab:red','tab:purple','tab:brown','tab:pink','tab:gray','tab:olive','tab:cyan')
 mpllinestyles = ('solid','dashed','dotted','dashdot',(0, (3, 5, 1, 5, 1, 5)))
@@ -1279,26 +1291,28 @@ class TurbiditySim:
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.pdf')
         if show: plt.show()
 
-    def spacetime(self,xlim=[None,None],tmax = None,show=False):
+    def spacetime(self,xlim=[None,None],tmax = None,show=False,save=True,cbar = True):
         from parmat import cm_data
         from matplotlib.colors import LinearSegmentedColormap
         cmap = LinearSegmentedColormap.from_list('mypar', cm_data, N=256)
 
-        article_params()
-        plt.figure(figsize=[2.5,2])
+        if save:
+            article_params()
+            plt.figure(figsize=[2.5,2])
         x_min_idx = np.argmin(np.abs(self.x-xlim[0])) if xlim[0] else 0
         x_max_idx = np.argmin(np.abs(self.x-xlim[1])) if xlim[1] else self.N
         t_idx     = np.argmin(np.abs(self.T-tmax))    if tmax    else len(self.T)
         fig = plt.pcolormesh(self.x[x_min_idx:x_max_idx],self.T[:t_idx],self.h[:t_idx,x_min_idx:x_max_idx],shading = 'gouraud',cmap=cmap,rasterized=True)
-        plt.colorbar(fig)
+        if cbar: plt.colorbar(fig)
         plt.xlabel('$x$')
         plt.ylabel('$t$')
 
-        plt.subplots_adjust(left = 0.14,right = 0.99, top = 0.97, bottom = 0.19)
-        fullFileName = self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName
-        plt.savefig(fullFileName + '.png',dpi = 1200)
-        plt.savefig(fullFileName + '_tmp' + '.pdf',dpi = 1200)
-        os.replace(fullFileName + '_tmp' + '.pdf',fullFileName + '.pdf')
+        if save:
+            plt.subplots_adjust(left = 0.14,right = 0.99, top = 0.97, bottom = 0.19)
+            fullFileName = self.rootFile + 'solutions/plots/' + 'SpaceTime_' + self.fileName
+            plt.savefig(fullFileName + '.png',dpi = 1200)
+            plt.savefig(fullFileName + '_tmp' + '.pdf',dpi = 1200)
+            os.replace(fullFileName + '_tmp' + '.pdf',fullFileName + '.pdf')
         if show: plt.show()
 
     def front_vel(self):
@@ -1354,7 +1368,14 @@ class TurbiditySim:
         plt.ylabel('concentration')
 
 def Deposit_Results(
-        SimVars = [(0.70, 0.70),(0.70, 1.00),(1.00, 0.70),(1.00, 1.00),(0.70, 1.43),(1.43, 0.70)],
+        SimVars = [
+            (1.00, 1.00),
+            (1.43, 0.70),
+            (1.00, 0.70),
+            (0.70, 0.70),
+            (0.70, 1.00),
+            (0.70, 1.43)
+        ],
         SimPack=None,
         U_s=0.01,
         rootFile = 'Jun12_DepositionExamplePlots/',
@@ -1455,6 +1476,7 @@ def Deposit_Results(
         # for i in [(i+1)/10 for i in range(10)]:
         #     fig.text(i,0.05,f'{i:0.1f}',ha='center',va='center')
         #     fig.text(0.95,i,f'{i:0.1f}',ha='center',va='center')
+        if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.png',dpi=1000)
         if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.pdf',dpi=1000)
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
@@ -1497,6 +1519,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         plt.xlim([0,None])
         plt.ylim([0,None])
+        panel_label(plt.gca())
 
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
@@ -1505,7 +1528,8 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
         plt.ylabel('position, $x_b$')
         plt.xlim([0,None])
         plt.ylim([0,None])
-        legend_list.append('$h_0$=%0.2f, $c_0$=%0.2f'%(sim.hR0,sim.cR0))
+        panel_label(plt.gca())
+        legend_list.append('$h_r$=%0.2f, $c_r$=%0.2f'%(sim.hR0,sim.cR0))
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
@@ -1549,6 +1573,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.ylabel("velocity, $\\frac{dx_b}{dt}$")
         plt.ylim([0,None])
         plt.xlim([0,None])
+        panel_label(plt.gca())
 
         plt.subplot(212)
         plt.plot(sim.t_post,sim.bore,color=tabcolors[i],linestyle = mpllinestyles[0])
@@ -1557,7 +1582,8 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
         plt.ylabel('position, $x_b$')
         plt.xlim([0,None])
         plt.ylim([0,None])
-        legend_list.append('$U_s=$%0.2f'%(sim.U_s))
+        panel_label(plt.gca())
+        legend_list.append('$u_s=$%0.2f'%(sim.U_s))
 
     legend_colors += list(tabcolors[:len(Sims)])
     legend_linestyles += [mpllinestyles[0]]*(len(Sims))
@@ -1815,13 +1841,11 @@ class DepositionAnalysis:
     def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True):
         if save:
             article_params()
-            plt.figure(figsize=[3.6,3])
+            plt.figure(figsize=[3,3*3/3.6])
         Z = getattr(self,attr)
         Zm = np.ma.masked_invalid(Z)
         pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'nearest',rasterized=True)
         plt.contour(self.H2,self.C2,Z,colors='k',levels=[0])
-        # plt.xlim(self.H2[0],self.H2[-1])
-        # plt.ylim(self.C2[0],self.C2[-1])
         plt.gca().set_aspect('equal')
         if plotTitle: plt.title(plotTitle)
         if panel_label_align:
@@ -1862,11 +1886,11 @@ class DepositionAnalysis:
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.1f'))
         cb.set_ticks(np.arange(np.ceil(Zm.min()*10),np.floor(Zm.max()*10)+1)/10)
-        plt.subplots_adjust(left=0.0,right=0.9,top=0.99,bottom=0.)
+        plt.subplots_adjust(left=0.16,right=0.89,top=0.99,bottom=0.16)
 
         if save:
-            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', bbox_inches='tight',dpi=1000)
-            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', bbox_inches='tight',dpi=800)
+            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', dpi=1000)
+            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', dpi=800)
             plt.close()
             plt.rcParams.update({"text.usetex":False})
 
@@ -2494,8 +2518,17 @@ def article_plots(Figs=list(range(1,12))):
         # This figure has gone away,
         # but we want find a "best fit" parameter to report for planes. 
     if 7 in Figs:
-        for sim in Fig2_7_8Sims:
-            sim.spacetime(xlim=[-5,5])
+        article_params()
+        plt.figure(figsize=[6,2.5])
+
+        for i,sim in enumerate(Fig2_7_8Sims):
+            plt.subplot(1,2,i+1)
+            sim.spacetime(xlim=[-5,5],save=False, cbar = True if i == len(Fig2_7_8Sims)-1 else False)
+            panel_label(plt.gca(),subplot_number=i)
+        plt.subplots_adjust(top = 0.98, right = 0.98, left = 0.08, bottom = 0.18)
+        fullFileName = sim.rootFile + 'solutions/plots/' + 'SubplotsSpaceTime_'
+        plt.savefig(fullFileName + '.pdf',dpi = 1200)
+
         # hTwo0.70_cTwo0.70_5apart_N6000_CFL0.100_T6.0_NuRe1000_Us0.000_hmin0.00010_sharp200
         # Figure 7,  Results - Space time plot
         # Add test case matching figure 4
