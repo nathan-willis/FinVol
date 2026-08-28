@@ -630,6 +630,22 @@ class TurbiditySim:
         plt.plot(self.T,suspended_pct, color = LC, linestyle = LS)
         return self.T[np.argwhere(suspended_pct > 0.05)[-1][0]]
 
+    def local_bore_data(self,x_bore,u_bore,h_bore):
+        threshold = (np.max(h_bore)+np.min(h_bore))/2
+        bore_index_local = np.argwhere(h_bore>threshold).reshape(-1)[-1]
+
+        u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore) # u_mbi is u_minus bore index, u_pbi is u_plus bore index
+
+        bore_loc = (x_bore[bore_index_local]-x_bore[bore_index_local+1])*(threshold-h_bore[bore_index_local+1])/(h_bore[bore_index_local]-h_bore[bore_index_local+1])+x_bore[bore_index_local+1] # Linear approximation between nodes values for height immediately above/below threshold
+        # if bore_loc < 0.2: continue
+        h_minus_temp, h_plus_temp = h_bore[u_mbi], h_bore[u_pbi]
+        new_thresh = (h_minus_temp+h_plus_temp)/2
+        #bore_local_index = np.argwhere(h_bore>new_thresh)[-1][0]
+
+        #bore_local_loc = (x_bore[bore_local_index]-x_bore[bore_local_index+1])*(new_thresh-h_bore[bore_local_index+1])/(h_bore[bore_local_index]-h_bore[bore_local_index+1])+x_bore[bore_local_index+1] # Linear approximation between nodes values for height immediately above/below threshold
+        #print(bore_local_loc,bore_loc)
+        return bore_loc, u_bore[u_mbi], u_bore[u_pbi], h_bore[u_mbi], h_bore[u_pbi]
+
     def bore_data(self,subSampleBy=1,all_var=True,t_start=0,plot=False,save = True):
         def average_cp_cm(self,xB,CR_temp,front):
             def avg(f,a,b):
@@ -663,20 +679,23 @@ class TurbiditySim:
             h_max = 0 # Intialize h_max to be 0, so that at the first iteration it will be smaller than actual h_max and replaced with h_max
             bore_index = self.coll_idx # Initialize the bore index as the collision index
 
+            bore_away_from_center_index = np.argmin(np.abs(self.x - (self.coll_loc + 0.05)))
             for t,u_fake,h_fake,c_fake in zip(self.T,self.u,self.h,self.c2):
                 u_ = deepcopy(u_fake) # It appeared that within this loop the data was getting overwritten with u_ (which does not make sense), the deepcopy forces this to NOT happen
                 h_ = deepcopy(h_fake) # Same as above
                 c_ = deepcopy(c_fake) # Same as above
                 window_size = int(self.N*0.0025) # Create a "viewing window" so that the search for the bore is only local to the previous bore. 
-                if (not post_collision) and h_[bore_index]>2*self.h_min and np.max(h_)<h_max and self.x[np.argmax(h_)]<2 and t>max(t_start,self.coll_time):
+                if (not post_collision) and h_[bore_index]>2*self.h_min and (np.max(h_)<h_max or h_[bore_away_from_center_index] > 0.5*h_max) and self.x[np.argmax(h_)]<2 and t>max(t_start,self.coll_time):
                     '''
                     There are four conditions (I don't really count t>t_start) we want before tracking the bore.
                       1) not post_collision is there to make sure we never flip this flag more than once.
                       2) h_[bore]>2*h_min checks that the currents have reach the collision point.
                       3) After collsion, the fluids jet "up" and this region is fairly noisy, we will wait until the jet starts to recede.
-                         The maximum will be within the jet, we donlt want to track the bore until the current max is smaller than the previous max.
-                         h_max is updated below.
+                        The maximum will be within the jet, we donlt want to track the bore until the current max is smaller than the previous max.
+                        h_max is updated below.
+                        Alternatively, we check that the bore is "sufficiently" far from collision (sufficient here is 0.05)
                       4) Right after collision, the argmax of h should be near the bore, which should be somewhat near the origin. This is mainly to avoid to "snowplow" being the max.
+                        Reviewing this, this item seems problematic to me... if there is ever an issue with tracking, start here. 
 
                       **5) Sometimes I want to force it to start later to ignore and difficulties immediately following collision
                     '''
@@ -697,31 +716,21 @@ class TurbiditySim:
                     u_bore = u_[bore_local_search]
                     h_bore = h_[bore_local_search]
                     x_bore = self.x[bore_local_search]
-                    threshold = (np.max(h_bore)+np.min(h_bore))/2
-                    bore_index_local = np.argwhere(h_bore>threshold).reshape(-1)[-1]
-                    bore_index = np.argmin(np.abs(self.x - x_bore[bore_index_local]))
 
-                    u_mbi, u_pbi = np.argmax(u_bore), np.argmin(u_bore) # u_mbi is u_minus bore index, u_pbi is u_plus bore index
-
-                    bore_loc = (self.x[bore_index]-self.x[bore_index+1])*(threshold-h_[bore_index+1])/(h_[bore_index]-h_[bore_index+1])+self.x[bore_index+1] # Linear approximation between nodes values for height immediately above/below threshold
-                    if bore_loc < 0.2: continue
-                    h_minus_temp, h_plus_temp = h_bore[u_mbi], h_bore[u_pbi]
-                    new_thresh = (h_minus_temp+h_plus_temp)/2
-                    #bore_local_index = np.argwhere(h_bore>new_thresh)[-1][0]
-
-                    #bore_local_loc = (x_bore[bore_local_index]-x_bore[bore_local_index+1])*(new_thresh-h_bore[bore_local_index+1])/(h_bore[bore_local_index]-h_bore[bore_local_index+1])+x_bore[bore_local_index+1] # Linear approximation between nodes values for height immediately above/below threshold
-                    #print(bore_local_loc,bore_loc)
+                    bore_loc, u_m, u_p, h_m, h_p = self.local_bore_data(x_bore,u_bore,h_bore)
 
                     t_post.append(t-self.coll_time)
-                    u_minus.append(u_bore[u_mbi])
-                    u_plus.append(u_bore[u_pbi])
-                    h_minus.append(h_bore[u_mbi])
-                    h_plus.append(h_bore[u_pbi])
+                    u_minus.append(u_m)
+                    u_plus.append(u_p)
+                    h_minus.append(h_m)
+                    h_plus.append(h_p)
 
                     front_loc = self.x[front_index]
 
                     cmA, cpA = average_cp_cm(self,bore_loc,c_,front_loc)
                     print(t,cpA,cmA)
+
+                    bore_index = np.argmin(np.abs(self.x - bore_loc))
 
                     HMA = np.sum(h_fake[self.coll_idx:bore_index])*self.dx/(bore_loc-self.coll_loc)
                     HPA = np.sum(h_fake[bore_index:front_index])*self.dx/(front_loc-bore_loc)
@@ -974,94 +983,94 @@ class TurbiditySim:
         up = self.uP_data[idx]
         um = self.uM_data[idx]
         x_upper_bound = min(self.x[-1],np.ceil(1.05*front_pos))
+        AP = dict(facecolor='black',width = 0.1, headwidth = 4,headlength=6) #Arrow properties for annotation
 
         article_params()
-        plt.figure(figsize=[5.125,4])
+        plt.figure(figsize=[5.125,1.8])
 
-        # Plot 1, height plot with h+,h-,xN,xB labeled
-        plt.subplot(311)
-        # self.plot_time('h', time, xlim=[0,x_upper_bound])
-        self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
-        AP = dict(facecolor='black',width = 0.1, headwidth = 4,headlength=6) #Arrow properties for annotation
-        yb_min = plt.gca().get_ylim()[0] # yb is y bounds, so I want the y bound minimum
-        yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
-        plt.annotate(
-            '$h_-$',
-            xy=(bore_pos+0.02*x_upper_bound,hm),
-            xytext=(bore_pos + 0.21*x_upper_bound,hm),
-            horizontalalignment='center',
-            verticalalignment = 'center',
-            arrowprops=AP
-        )
-        plt.annotate(
-            '$h_+$',
-            xy=(bore_pos-0.02*x_upper_bound,hp),
-            xytext=(bore_pos - 0.21*x_upper_bound,hp),
-            horizontalalignment='center',
-            verticalalignment = 'center',
-            arrowprops=AP
-        )
+        # # Plot 1, height plot with h+,h-,xN,xB labeled
+        # plt.subplot(311)
+        # # self.plot_time('h', time, xlim=[0,x_upper_bound])
+        # self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
+        # yb_min = plt.gca().get_ylim()[0] # yb is y bounds, so I want the y bound minimum
+        # yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
         # plt.annotate(
-        #     '$x_b$',
-        #     xy=(bore_pos, yb_min),
-        #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        #     '$h_-$',
+        #     xy=(bore_pos+0.02*x_upper_bound,hm),
+        #     xytext=(bore_pos + 0.21*x_upper_bound,hm),
         #     horizontalalignment='center',
-        #     verticalalignment = 'top',
+        #     verticalalignment = 'center',
         #     arrowprops=AP
         # )
         # plt.annotate(
-        #     '$x_N$',
-        #     xy=(front_pos,yb_min),
-        #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        #     '$h_+$',
+        #     xy=(bore_pos-0.02*x_upper_bound,hp),
+        #     xytext=(bore_pos - 0.21*x_upper_bound,hp),
         #     horizontalalignment='center',
-        #     verticalalignment = 'top',
+        #     verticalalignment = 'center',
         #     arrowprops=AP
         # )
-        panel_label(plt.gca())
+        # # plt.annotate(
+        # #     '$x_b$',
+        # #     xy=(bore_pos, yb_min),
+        # #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        # #     horizontalalignment='center',
+        # #     verticalalignment = 'top',
+        # #     arrowprops=AP
+        # # )
+        # # plt.annotate(
+        # #     '$x_N$',
+        # #     xy=(front_pos,yb_min),
+        # #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        # #     horizontalalignment='center',
+        # #     verticalalignment = 'top',
+        # #     arrowprops=AP
+        # # )
+        # panel_label(plt.gca())
 
-        # Plot 2, velocity plot with u+,u-,xN,xB labeled
-        plt.subplot(312)
-        # self.plot_time('u', time, xlim=[0,x_upper_bound])
-        self.plot_time('u', time, xlim=[-x_upper_bound,x_upper_bound])
-        plt.xlabel('$x$')
-        yb_min = plt.gca().get_ylim()[0]
-        yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
-        plt.annotate(
-            '$u_+$',
-            xy=(bore_pos+0.02*x_upper_bound,up),
-            xytext=(bore_pos + 0.21*x_upper_bound,up),
-            horizontalalignment='center',
-            verticalalignment = 'center',
-            arrowprops=AP
-        )
-        plt.annotate(
-            '$u_-$',
-            xy=(bore_pos-0.02*x_upper_bound,um),
-            xytext=(bore_pos - 0.21*x_upper_bound,um),
-            horizontalalignment='center',
-            verticalalignment = 'center',
-            arrowprops=AP
-        )
+        # # Plot 2, velocity plot with u+,u-,xN,xB labeled
+        # plt.subplot(312)
+        # # self.plot_time('u', time, xlim=[0,x_upper_bound])
+        # self.plot_time('u', time, xlim=[-x_upper_bound,x_upper_bound])
+        # plt.xlabel('$x$')
+        # yb_min = plt.gca().get_ylim()[0]
+        # yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
         # plt.annotate(
-        #     '$x_b$',
-        #     xy=(bore_pos, yb_min),
-        #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        #     '$u_+$',
+        #     xy=(bore_pos+0.02*x_upper_bound,up),
+        #     xytext=(bore_pos + 0.21*x_upper_bound,up),
         #     horizontalalignment='center',
-        #     verticalalignment = 'top',
+        #     verticalalignment = 'center',
         #     arrowprops=AP
         # )
         # plt.annotate(
-        #     '$x_N$',
-        #     xy=(front_pos,yb_min),
-        #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        #     '$u_-$',
+        #     xy=(bore_pos-0.02*x_upper_bound,um),
+        #     xytext=(bore_pos - 0.21*x_upper_bound,um),
         #     horizontalalignment='center',
-        #     verticalalignment = 'top',
+        #     verticalalignment = 'center',
         #     arrowprops=AP
         # )
-        panel_label(plt.gca())
+        # # plt.annotate(
+        # #     '$x_b$',
+        # #     xy=(bore_pos, yb_min),
+        # #     xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+        # #     horizontalalignment='center',
+        # #     verticalalignment = 'top',
+        # #     arrowprops=AP
+        # # )
+        # # plt.annotate(
+        # #     '$x_N$',
+        # #     xy=(front_pos,yb_min),
+        # #     xytext=(front_pos,yb_min-0.25*(yb_max-yb_min)),
+        # #     horizontalalignment='center',
+        # #     verticalalignment = 'top',
+        # #     arrowprops=AP
+        # # )
+        # panel_label(plt.gca())
 
         # Plot 3, schematic for box model with "ghost" box drawn
-        plt.subplot(313)
+        # plt.subplot(313)
         self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
         yb_min = plt.gca().get_ylim()[0]
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
@@ -1088,6 +1097,19 @@ class TurbiditySim:
             horizontalalignment='center',
             verticalalignment = 'top',
             arrowprops=AP
+        )
+        # plt.annotate(
+        #     '$(X_c=0)$',
+        #     xy = (0,yb_min - 0.25*(yb_max-yb_min)),
+        #     horizontalalignment = 'center',
+        #     verticalalignment = 'top',
+        # )
+        plt.text(
+            0,
+            yb_min - 0.33*(yb_max-yb_min),
+            '$(X_c=0)$',
+            horizontalalignment = 'center',
+            verticalalignment = 'top',
         )
         L1,L2 = self.get_oneSided_boxModel_vertices(
             time,
@@ -1141,15 +1163,15 @@ class TurbiditySim:
             )
         )
         plt.gca().set_xticks([-12,-6,0,6,12])
-        panel_label(plt.gca())
+        # panel_label(plt.gca())
 
         # plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45)
-        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.0)
+        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.32, top = 0.98,hspace = 0.0)
         if show:
             plt.show()
         else:
-            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.png',dpi = 1200)
-            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModel_' + self.fileName + '.pdf')
+            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModelUpdated_' + self.fileName + '.png',dpi = 1200)
+            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModelUpdated_' + self.fileName + '.pdf')
     def num_val_schematic(self,time,show=True):
         self.bore_data()
         idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
@@ -1291,7 +1313,7 @@ class TurbiditySim:
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.pdf')
         if show: plt.show()
 
-    def spacetime(self,xlim=[None,None],tmax = None,show=False,save=True,cbar = True):
+    def spacetime(self,xlim=[None,None],tmax = None,show=False,save=True,cbar = True,cbar_label=None):
         from parmat import cm_data
         from matplotlib.colors import LinearSegmentedColormap
         cmap = LinearSegmentedColormap.from_list('mypar', cm_data, N=256)
@@ -1302,8 +1324,11 @@ class TurbiditySim:
         x_min_idx = np.argmin(np.abs(self.x-xlim[0])) if xlim[0] else 0
         x_max_idx = np.argmin(np.abs(self.x-xlim[1])) if xlim[1] else self.N
         t_idx     = np.argmin(np.abs(self.T-tmax))    if tmax    else len(self.T)
-        fig = plt.pcolormesh(self.x[x_min_idx:x_max_idx],self.T[:t_idx],self.h[:t_idx,x_min_idx:x_max_idx],shading = 'gouraud',cmap=cmap,rasterized=True)
-        if cbar: plt.colorbar(fig)
+        mesh = plt.pcolormesh(self.x[x_min_idx:x_max_idx],self.T[:t_idx],self.h[:t_idx,x_min_idx:x_max_idx],shading = 'gouraud',cmap=cmap,rasterized=True)
+        if cbar:
+            cb = plt.colorbar(mesh)
+            if cbar_label:
+                cb.set_label(cbar_label, rotation = 90, labelpad = 12)
         plt.xlabel('$x$')
         plt.ylabel('$t$')
 
@@ -1314,6 +1339,7 @@ class TurbiditySim:
             plt.savefig(fullFileName + '_tmp' + '.pdf',dpi = 1200)
             os.replace(fullFileName + '_tmp' + '.pdf',fullFileName + '.pdf')
         if show: plt.show()
+        return mesh
 
     def front_vel(self):
         vel = np.max(self.u[:,np.argwhere(self.x>0)],1)
@@ -1491,7 +1517,7 @@ def Deposit_Results(
             plt.close()
     return Sims,NoCollSims,LeftCurr
 
-def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,N=7000,finalTime=40.,shape_factor=1.):
+def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,rootFile='FinalData_Aug25_SWEdataForBoxModels/',sharp=200,N=28000,finalTime=40.,shape_factor=1.):
     '''
     This function plots the position and the velocity of the bore
     for both the Box Model and Shallow Water Model.
@@ -1503,7 +1529,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
     if Sims == None:
         Sims = []
         for sim in SimVars:
-            Sims.append(TurbiditySim(sim[0],sim[1],0.0,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
+            Sims.append(TurbiditySim(sim[0],sim[1],0.0,rootFile,['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
 
     plt.figure(figsize=[5.125,3])
     legend_list = ['SWE','Box Model','']
@@ -1545,7 +1571,7 @@ def Box_SWE_Asym(SimVars=[(1.0,1.0),(1.06,0.85),(1.11,0.7)],Sims=None,sharp=100,
     plt.close()
     return Sims
 
-def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.,shape_factor=1.,dt=0.01):
+def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,rootFile='FinalData_Aug25_SWEdataForBoxModels/',sharp=200,N=28000,finalTime=40.,shape_factor=1.,dt=0.01):
     '''
     This function plots the position and the velocity of the bore
     for both the Box Model and Shallow Water Model.
@@ -1557,7 +1583,7 @@ def Box_SWE_Settling(U_s=[0,0.01,0.02],Sims=None,sharp=100,N=14000,finalTime=40.
     if Sims == None:
         Sims = []
         for us in U_s:
-            Sims.append(TurbiditySim(1.0,1.0,us,'Nov24_AsymBoxModel/',['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
+            Sims.append(TurbiditySim(1.0,1.0,us,rootFile,['h','u','c1','c2'], sharp=sharp, N=N, finalTime=finalTime))
 
     plt.figure(figsize=[5.125,3.])
     legend_list = ['SWE','Box Model','']
@@ -1838,10 +1864,10 @@ class DepositionAnalysis:
             np.savetxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', self.COM_x, delimiter = ',')
             print('%0.2f seconds'%(time.time()-start))
 
-    def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True):
+    def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True,cbar_label = None):
         if save:
             article_params()
-            plt.figure(figsize=[3,3*3/3.6])
+            plt.figure(figsize=[3.2,3*3/3.6])
         Z = getattr(self,attr)
         Zm = np.ma.masked_invalid(Z)
         pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'nearest',rasterized=True)
@@ -1878,6 +1904,8 @@ class DepositionAnalysis:
                     va=offset[1]
                 )
                 # if label == '(b)': txt.set_path_effects([pe.withStroke(linewidth=1.5, foreground='white')])
+        plt.gca().set_xticks([0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4])
+        plt.gca().set_yticks([0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4])
         plt.xlabel('$h_r$')
         plt.ylabel('$c_r$')
 
@@ -1885,8 +1913,9 @@ class DepositionAnalysis:
         divider = make_axes_locatable(plt.gca())
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.1f'))
+        if cbar_label: cb.set_label(cbar_label, rotation=90, labelpad=6)
         cb.set_ticks(np.arange(np.ceil(Zm.min()*10),np.floor(Zm.max()*10)+1)/10)
-        plt.subplots_adjust(left=0.16,right=0.89,top=0.99,bottom=0.16)
+        plt.subplots_adjust(left=0.16,right=0.84,top=0.99,bottom=0.16)
 
         if save:
             plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', dpi=1000)
@@ -2154,7 +2183,7 @@ def collision_details(u_s,rootFile,N=5000,sharp=50):
     plt.rcParams.update({"text.usetex":False})
 
 def NumericalValidationScheme(
-    rootFile='Apr29_FinalNumericalValidation/',
+    rootFile='FinalData_Aug25_NumericalValidation/',
     N=28000,
     h_min=0.0001,
     NuRe=1000,
@@ -2165,12 +2194,22 @@ def NumericalValidationScheme(
     apart = 5,
     plot_=True,
 ):
+    from decimal import Decimal
 
-    def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max):
-        plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
-        plt.figure(figsize = [6,5])
+    def label_precision(par_list):
+        return max(
+            max(0, -Decimal(str(par)).normalize().as_tuple().exponent)
+            for par in par_list
+        )
 
-        for x,y,par in zip(X,Y,par_list):
+    def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max,legend_list=None,show_legend=False):
+        # plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
+        # plt.figure(figsize = [6,5])
+        if legend_list is None:
+            legend_list = par_list
+        precision = label_precision(legend_list)
+
+        for x,y,par in zip(X,Y,legend_list):
             idx = np.where(x>x_Min)[0]
             x = x[idx]
             y = y[idx]
@@ -2178,27 +2217,35 @@ def NumericalValidationScheme(
             x = x[idx]
             y = y[idx]
 
-            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par)
+            str_label = f'${my_label} = {par:.{precision}f}$'
             plt.plot(x,y,label = str_label)
         plt.xlabel('$x$')
-        plt.ylabel(variable_y_label)
-        plt.legend()
+        # plt.ylabel(variable_y_label)
+        plt.ylabel(variable_dict[variable_y_label+'_latex'])
+        if show_legend:
+            plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), borderaxespad=0.)
 
-        plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
-        plt.close()
-        plt.rcParams.update({"text.usetex":False})
+        # plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
+        # plt.close()
+        # plt.rcParams.update({"text.usetex":False})
 
     def print_latex_table(var,label,M):
         print('')
-        label.append(77)
-        M = np.vstack((np.array(label),M))
-        l = ['S','u_-','u_+','h_-','h_+']
+        label = list(label)
+        precision = label_precision(label)
+        M = np.vstack((np.array(label + [np.nan]),M))
+        l = ['x_b','u_-','u_+','h_-','h_+']
         l.insert(0,var)
         rows,cols = M.shape
         for i in range(rows):
             string_ = '        $'+l[i]+'$'
             for j in range(cols):
-                string_ += ' & %s'%('\\%') if i==0 and j == M.shape[1]-1 else ' & %0.6f '%M[i,j]
+                if i==0 and j == M.shape[1]-1:
+                    string_ += ' & %s'%('\\%')
+                elif i==0:
+                    string_ += f' & {M[i,j]:.{precision}f} '
+                else:
+                    string_ += ' & %0.6f '%M[i,j]
             string_ += '\\\\'
             if i==0:
                 string_ += ' \\hline'
@@ -2218,228 +2265,61 @@ def NumericalValidationScheme(
         H_plot = []
         U_plot = []
         X_plot = []
+        legend_list = []
 
         for i,val in enumerate(param_list):
             params = dict(N=N, h_min=h_min, NuRe=NuRe, CFL=CFL, sharp=sharp)
             params[param] = val   # override the one we’re sweeping
-            sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u'],finalTime=T,**params)
-            print(label_table,label_figure)
+            sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u','c1','c2'],finalTime=T,**params)
             # breakpoint()
-            # sim.bore_data()
 
             # t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200)
-            # x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            # x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
+            shift_idx = np.argwhere(sim.x>0)[0][0]
+            bore_idx = np.abs(np.diff(sim.h[1,(sim.x>0) & (sim.x<50)])).argmax() + shift_idx
+            window_size = int(0.5/sim.dx)
+            near_bore = slice(bore_idx-window_size,bore_idx+window_size)
+            u_bore = sim.u[-1,near_bore]
+            h_bore = sim.h[-1,near_bore]
+            x_bore = sim.x[near_bore]
 
-            # for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-            #     par_matrix[j,i] = val
+            bore_loc, u_m, u_p, h_m, h_p = sim.local_bore_data(x_bore,u_bore,h_bore)
+
+            x_min_bore = bore_loc if bore_loc<x_min_bore else x_min_bore
+            x_max_bore = bore_loc if bore_loc>x_max_bore else x_max_bore
+            # for j,val in enumerate([sim.bore[-1], sim.uM_data[-1], sim.uP_data[-1], sim.hM_data[-1], sim.hP_data[-1]]):
+            for j,bore_val in enumerate([bore_loc, u_m, u_p, h_m, h_p]):
+                par_matrix[j,i] = bore_val
             # x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)
             # H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)[-1]
-            # X_plot.append(x)
-            # H_plot.append(H[-1,1:])
-            # U_plot.append(U[-1,1:])
+            X_plot.append(sim.x)
+            H_plot.append(sim.h[-1,:])
+            U_plot.append(sim.u[-1,:])
+            legend_list.append(round((sim.x[-1] - sim.x[0] + sim.dx)/val, 12) if param == 'N' else val)
 
-        # plot_numer(X_plot,H_plot,'Reynolds','\\textrm{Re}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        # plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        # for j in range(par_matrix.shape[0]):
-            # par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        # print_latex_table('\\Rey', par_list, par_matrix)
-        # # return par_matrix
+        article_params()
+        fig = plt.figure(figsize=[7.057,2.5])
+        plt.subplot(121)
+        plot_numer(X_plot,H_plot,param,label_figure,'h',param_list,x_min_bore-0.5,x_max_bore+0.5,legend_list=legend_list);
+        panel_label(plt.gca(),subplot_number=0)
+
+        plt.subplot(122)
+        plot_numer(X_plot,U_plot,param,label_figure,'u',param_list,x_min_bore-0.5,x_max_bore+0.5,legend_list=legend_list,show_legend=True);
+        panel_label(plt.gca(),subplot_number=1)
+
+        plt.subplots_adjust(right = 0.83, top = 0.99, left = 0.09, bottom = 0.15,wspace = 0.25,)
+        plt.savefig(rootFile + 'solutions/plots/NumericalValidation_' + param + '.pdf')
+        plt.close()
+            # plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
+        for j in range(par_matrix.shape[0]):
+            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+        print_latex_table(label_table, legend_list, par_matrix)
+        # return par_matrix
     NumericalVal('NuRe',[250,500,1000,2000],'\\Rey','\\textrm{Re}')
     NumericalVal('N',[7000,14000,28000,56000],'\\Delta x','\\Delta x')
     # NumericalVal('N',[7000,14000,28000],'\\Delta x','\\Delta x')
     NumericalVal('CFL',[0.4,0.2,0.1,0.05],'\\Lambda','\\Lambda')
     NumericalVal('h_min',[0.0004,0.0002,0.0001,0.00005],'\\hmin','h_{\\textrm{min}}')
 
-
-
-def NumericalValidation(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0,T=40.0,apart = 5, FrSquared = 2.828, plot_=True):
-    def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max):
-        plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
-        plt.figure(figsize = [6,5])
-
-        for x,y,par in zip(X,Y,par_list):
-            idx = np.where(x>x_Min)[0]
-            x = x[idx]
-            y = y[idx]
-            idx = np.where(x<x_Max)[0]
-            x = x[idx]
-            y = y[idx]
-
-            str_label ='$%s = %i$'%(my_label,par) if isinstance(par,int) else '$%s = %f$'%(my_label,par)
-            plt.plot(x,y,label = str_label)
-        plt.xlabel('$x$')
-        plt.ylabel(variable_y_label)
-        plt.legend()
-
-        plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
-        plt.close()
-        plt.rcParams.update({"text.usetex":False})
-
-    def print_latex_table(var,label,M):
-        print('')
-        label.append(77)
-        M = np.vstack((np.array(label),M))
-        l = ['S','u_-','u_+','h_-','h_+']
-        l.insert(0,var)
-        rows,cols = M.shape
-        for i in range(rows):
-            string_ = '        $'+l[i]+'$'
-            for j in range(cols):
-                string_ += ' & %s'%('\\%') if i==0 and j == M.shape[1]-1 else ' & %0.6f '%M[i,j]
-            string_ += '\\\\'
-            if i==0:
-                string_ += ' \\hline'
-            print(string_)
-        print('')
-    def NumericalValidation_NuRe(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
-        par_list = [250,500,1000,2000]
-        par_matrix = np.zeros((5,len(par_list)+1))
-        x_min_bore = 1000000
-        x_max_bore = 0
-        H_plot = []
-        U_plot = []
-        X_plot = []
-
-        for i in range(len(par_list)):
-            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200)
-            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
-
-            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-                par_matrix[j,i] = val
-            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)
-            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200,T=T)[-1]
-            X_plot.append(x)
-            H_plot.append(H[-1,1:])
-            U_plot.append(U[-1,1:])
-
-        plot_numer(X_plot,H_plot,'Reynolds','\\textrm{Re}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        print_latex_table('\\Rey', par_list, par_matrix)
-        return par_matrix
-
-    def NumericalValidation_CFL(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
-        par_list = [0.4,0.2,0.1,0.05]
-        par_matrix = np.zeros((5,len(par_list)+1))
-        x_min_bore = 1000000
-        x_max_bore = 0 
-        H_plot = []
-        U_plot = []
-        X_plot = []
-
-        for i in range(len(par_list)):
-            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200)
-            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
-
-            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-                par_matrix[j,i] = val
-            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200,T=T)
-            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=par_list[i],sharp=200,T=T)[-1]
-            X_plot.append(x)
-            H_plot.append(H[-1,1:])
-            U_plot.append(U[-1,1:])
-
-        plot_numer(X_plot,H_plot,'CFL','\\Lambda','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        plot_numer(X_plot,U_plot,'CFL','\\Lambda','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        print_latex_table('\\Lambda', par_list, par_matrix)
-        return par_matrix
-    def NumericalValidation_Sharp(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
-        par_list = [50,100,200,400]
-        par_matrix = np.zeros((5,len(par_list)+1))
-        x_min_bore = 1000000
-        x_max_bore = 0
-        H_plot = []
-        U_plot = []
-        X_plot = []
-
-        for i in range(len(par_list)):
-            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe ,CFL=0.1,sharp=par_list[i])
-            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
-
-            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-                par_matrix[j,i] = val
-            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=par_list[i],T=T)
-            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=par_list[i],T=T)[-1]
-            X_plot.append(x)
-            H_plot.append(H[-1,1:])
-            U_plot.append(U[-1,1:])
-
-        plot_numer(X_plot,H_plot,'Sharp','\\sigma','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        plot_numer(X_plot,U_plot,'Sharp','\\sigma','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        print_latex_table('\\sigma', par_list, par_matrix)
-        return par_matrix
-
-    def NumericalValidation_hmin(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
-        par_list = [0.0004,0.0002,0.0001,0.00005]
-        par_matrix = np.zeros((5,len(par_list)+1))
-        x_min_bore = 1000000
-        x_max_bore = 0
-        H_plot = []
-        U_plot = []
-        X_plot = []
-
-        for i in range(len(par_list)):
-            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = 1000,CFL=0.1,sharp=200)
-            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
-
-            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-                par_matrix[j,i] = val
-            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = NuRe,CFL=0.1,sharp=200,T=T)
-            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=par_list[i],NuRe = NuRe,CFL=0.1,sharp=200,T=T)[-1]
-            X_plot.append(x)
-            H_plot.append(H[-1,1:])
-            U_plot.append(U[-1,1:])
-
-        plot_numer(X_plot,H_plot,'hmin','h_{\\textrm{min}}','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        plot_numer(X_plot,U_plot,'hmin','h_{\\textrm{min}}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        print_latex_table('\\hmin', par_list, par_matrix)
-        return par_matrix
-
-    def NumericalValidation_N(rootFile='NumericalValidation_2025Mar19/',N=20000,h_min=0.0001,NuRe=1000,CFL=0.1,sharp=200,U_s=0.0):
-        par_list = [5000,10000,20000,40000]
-        par_matrix = np.zeros((5,len(par_list)+1))
-        x_min_bore = 1000000
-        x_max_bore = 0
-        H_plot = []
-        U_plot = []
-        X_plot = []
-
-        for i in range(len(par_list)):
-            t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=0.0001,NuRe = 1000,CFL=0.1,sharp=200)
-            x_min_bore = bore[-1] if bore[-1]<x_min_bore else x_min_bore
-            x_max_bore = bore[-1] if bore[-1]>x_max_bore else x_max_bore
-
-            for j,val in enumerate([bore[-1], um[-1], up[-1], hm[-1], hp[-1]]):
-                par_matrix[j,i] = val
-            x,T_vec,U = unpack_fo_real('u',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=200,T=T)
-            H = unpack_fo_real('h',rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=par_list[i],h_min=h_min,NuRe = NuRe,CFL=0.1,sharp=200,T=T)[-1]
-            X_plot.append(x)
-            H_plot.append(H[-1,1:])
-            U_plot.append(U[-1,1:])
-
-        plot_numer(X_plot,H_plot,'SpaceDiscretization','\\Delta x','height',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        plot_numer(X_plot,U_plot,'SpaceDiscretization','\\Delta x','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
-        for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
-        print_latex_table('\\Delta x', [100/N for N in [5000, 10000, 20000, 40000]], par_matrix)
-        return par_matrix
-    NumericalValidation_N()
-    NumericalValidation_hmin()
-    NumericalValidation_NuRe()
-    NumericalValidation_Sharp()
-    NumericalValidation_CFL()
 
 def article_plots(Figs=list(range(1,12))):
     article_params()
@@ -2450,7 +2330,7 @@ def article_plots(Figs=list(range(1,12))):
                 TurbiditySim(
                     *test,
                     0.0,
-                    'Apr22_FinalResults/',
+                    'FinalData_Apr22_GeneralResults/',
                     ['h','u','c1','c2','d1','d2'],
                     N=12000,
                     finalTime=12,
@@ -2466,7 +2346,7 @@ def article_plots(Figs=list(range(1,12))):
                 TurbiditySim(
                     *test,
                     0.0,
-                    'Apr22_FinalResults/',
+                    'FinalData_Apr22_GeneralResults/',
                     ['h','u','c1','c2'],
                     N=6000,
                     finalTime=6,
@@ -2491,12 +2371,9 @@ def article_plots(Figs=list(range(1,12))):
         # leave h_r/c_r 
         # Keep all axes equal
         # vertically stacked, with no space between figures (since they have a shared axis), with tick marks on each axis (but no labels) 
-    if 3 in Figs:
-        pass
-        # Figure 3,  Numerical validation for spatial resolution
-    if 4 in Figs:
-        pass
-        # Figure 4,  Numerical validation for Reynolds number
+    if 3 in Figs or 4 in Figs:
+        NumericalValidationScheme()
+        # Figures 3 and 4,  Numerical validation for spatial resolution
     if 5 in Figs:
         # Figure 5,  Sediment deposition - example solutions
         Deposit_Results()
@@ -2510,23 +2387,32 @@ def article_plots(Figs=list(range(1,12))):
             'Feb26_2026_SedimentationInitialConditionTest/',
             N=28000,
             sharp=200
-        ).myPcolor('encroachment_mass','',save=True)
+        ).myPcolor('encroachment_mass','',save=True, cbar_label='encroachment mass, $\mu$')
         # add a,b,c,d at correct locations aligning with figure 6
         # change labels to c_r and h_r
-        # only 1 significant digit on the colorbar
-        # OLD Figure,  Sediment deposition - Encroachment mass 3D view with planar approximation
+        # only 1 significant digit on the colorba OLD Figure,  Sediment deposition - Encroachment mass 3D view with planar approximation
         # This figure has gone away,
         # but we want find a "best fit" parameter to report for planes. 
     if 7 in Figs:
         article_params()
-        plt.figure(figsize=[6,2.5])
 
+        # cbar_label = None
+        cbar_label = variable_dict['h_latex']
+        fig, ax = plt.subplots(
+            1, 2,
+            figsize = [6.5 if cbar_label is not None else 6,2.5],
+        )
+        plt.subplots_adjust(top = 0.97, right = 0.895, left = 0.06, bottom = 0.16,wspace = 0.18)
         for i,sim in enumerate(Fig2_7_8Sims):
-            plt.subplot(1,2,i+1)
-            sim.spacetime(xlim=[-5,5],save=False, cbar = True if i == len(Fig2_7_8Sims)-1 else False)
+            plt.sca(ax[i])
+            mesh = sim.spacetime(xlim=[-5,5],save=False, cbar = False)
             panel_label(plt.gca(),subplot_number=i)
-        plt.subplots_adjust(top = 0.98, right = 0.98, left = 0.08, bottom = 0.18)
-        fullFileName = sim.rootFile + 'solutions/plots/' + 'SubplotsSpaceTime_'
+        cbar_box = ax[1].get_position()
+        cax = fig.add_axes([cbar_box.x1 + 0.015, cbar_box.y0, 0.015, cbar_box.height])
+        cb = fig.colorbar(mesh,cax=cax)
+        if cbar_label:
+            cb.set_label(cbar_label,rotation = 90, labelpad=6)
+        fullFileName = sim.rootFile + 'solutions/plots/' + 'SpaceTime_Subplots'
         plt.savefig(fullFileName + '.pdf',dpi = 1200)
 
         # hTwo0.70_cTwo0.70_5apart_N6000_CFL0.100_T6.0_NuRe1000_Us0.000_hmin0.00010_sharp200
