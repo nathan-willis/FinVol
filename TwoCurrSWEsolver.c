@@ -7,18 +7,10 @@
 #include<string.h>
 #include<unistd.h>
 #include <sys/utsname.h>
-//#include "TwoCurrTestValues.h"
-//#include "utility_fns.h"
 
 // Numerical parameters 
-//#define N 8000 // N+1 nodes, N cells
 #define m 3  // WENO stencil size
 #define ng 3 // number of ghost cells
-//#define NuRe 1000. // Numerical Reynolds number
-//#define NuPe NuRe // Numerical Peclet number
-//#define h_min 0.0001 // minimum thickness
-//#define CFL 0.1 // CFL number Delta_t/Delta_x
-//#define sharp 50. // Sharpness parameter for initial conditions
 
 int N;
 double NuRe, NuPe, CFL, h_min, sharp;
@@ -29,20 +21,13 @@ double c2init, h2init;
 #define b 70.  // upper bound of the interval
 #define T 40. // Final Time
 #define FrSquared 1.0 // Froude number
-//#define U_s 0.00 // Settling speed
-//double U_s = 0.0;
 
 double U_s;
 
 // Initital conditions parameters 
 #define apart 5.0 // How far apart are the centers of the current
 #define h1init 1.0
-//#define h2init 1.0
-//double h2init = 0.7;
 #define c1init 1.0
-//double c1init = 0.7;
-//#define c2init 1.0
-//double c2init = 0.7;
 #define cur1wid 1.0
 #define cur2wid 1.0
 
@@ -60,18 +45,18 @@ typedef struct {
 } Flux4;
 
 // File information
-#define fileprefix "FinalData_Aug25_NumericalValidation/"
+#define fileprefix "FinalData_Sep24_SedimentationIC/"
 #define subfile "sims/"
 static BCType bc_type = PERIODIC; 
 
-int save_q = 1; //Decide if you want to save to a file or not.
-int save_h = 1; //Decide if you want to save to a file or not.
-int save_phi1 = 1; //Decide if you want to save to a file or not.
-int save_phi2 = 1; //Decide if you want to save to a file or not.
+int save_q = 0; //Decide if you want to save to a file or not.
+int save_h = 0; //Decide if you want to save to a file or not.
+int save_phi1 = 0; //Decide if you want to save to a file or not.
+int save_phi2 = 0; //Decide if you want to save to a file or not.
 int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = 0.05; // Save timestamp this often
+double print_when = 40.0; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 
