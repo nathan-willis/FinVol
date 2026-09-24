@@ -36,10 +36,10 @@ double U_s;
 
 // Initital conditions parameters 
 #define apart 5.0 // How far apart are the centers of the current
-#define h1init 0.0
+#define h1init 1.0
 //#define h2init 1.0
 //double h2init = 0.7;
-#define c1init 0.0
+#define c1init 1.0
 //double c1init = 0.7;
 //#define c2init 1.0
 //double c2init = 0.7;
@@ -60,18 +60,18 @@ typedef struct {
 } Flux4;
 
 // File information
-#define fileprefix "Jun11_DepositionExamplePlots/"
-#define subfile "sims/OneCurrOnly_"
+#define fileprefix "FinalData_Aug25_NumericalValidation/"
+#define subfile "sims/"
 static BCType bc_type = PERIODIC; 
 
-int save_q = 0; //Decide if you want to save to a file or not.
-int save_h = 0; //Decide if you want to save to a file or not.
-int save_phi1 = 0; //Decide if you want to save to a file or not.
-int save_phi2 = 0; //Decide if you want to save to a file or not.
+int save_q = 1; //Decide if you want to save to a file or not.
+int save_h = 1; //Decide if you want to save to a file or not.
+int save_phi1 = 1; //Decide if you want to save to a file or not.
+int save_phi2 = 1; //Decide if you want to save to a file or not.
 int save_deposit = 1; //Decide if you want to save to a file or not.
 int J_save = 1; // jump between spatial cells that are saved.  
 int test_ = 0; // Do you want to compare to the values in TwoCurrTestValues.h?
-double print_when = 0.1; // Save timestamp this often
+double print_when = 0.05; // Save timestamp this often
 double print_check = 0.0; // Check if you should save timestamp
 double print_to_screen = .5; // Print to screen this often
 double print_screen_check = 0.0; // Check if you should print to screen 

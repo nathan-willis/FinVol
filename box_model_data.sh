@@ -1,0 +1,42 @@
+#!/bin/bash
+
+gcc -O3 -march=native -o box_model_Aug25.out TwoCurrSWEsolver.c # Compile main
+
+# Get batch index from first argument and set up batch_file
+batch_file="$1"
+
+# Find all PIDS to kill 
+#   ps aux | grep DepositionExamplePlots_Mar3| grep -v grep
+
+# look for number of processes the computer can run
+#   sysctl -n hw.ncpu
+
+# do
+# the ampersand is the magic that runs it in parallel
+# inputs go in this order N Reynolds CFL h_min sharp U_s c2init h2init
+
+# nohup ./IC_batch_runs.sh DepositExamplePlots_batch.txt &
+
+items=(
+  "0.0 1.0 1.0"
+  "0.01 1.0 1.0"
+  "0.02 1.0 1.0"
+  "0.0 1.06 0.85"
+  "0.0 1.11 0.7"
+)
+
+for item in "${items[@]}"; do
+  read -r u_s h_r c_r <<< "$item"
+
+  ./box_model_Aug25.out 28000 1000 0.1 0.0001 200. $u_s $c_r $h_r &
+done
+
+# while read param1 param2; do
+#     ./DepositionExamplePlots_Jun12.out 28000 1000 0.1 0.0001 200. 0.01 $param1 $param2 &
+#     echo "$param1 $param2" >> Jun12_DepositionExamplePlots/progress.log
+#     while (( $(jobs -r | wc -l) >= max_jobs )); do
+#       sleep 5
+#     done
+# done < "$batch_file"
+
+wait
