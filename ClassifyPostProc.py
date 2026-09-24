@@ -109,6 +109,12 @@ char_vars = ['u','c1','c2']
 
 testFileName = 'SedimentationInitialConditionTest_2025Jun7/'
 
+def savefig_replace(filename, **kwargs):
+    root, ext = os.path.splitext(filename)
+    tmp = root + '_tmp' + ext
+    plt.savefig(tmp,**kwargs)
+    os.replace(tmp,filename)
+
 def load_settling_sims(US=[0,0.005,0.01,0.015,0.02]):
     S = {}
     for us in US:
@@ -1171,7 +1177,7 @@ class TurbiditySim:
             plt.show()
         else:
             plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModelUpdated_' + self.fileName + '.png',dpi = 1200)
-            plt.savefig(self.rootFile + 'solutions/plots/' + 'RhModelUpdated_' + self.fileName + '.pdf')
+            savefig_replace(self.rootFile + 'solutions/plots/' + 'RhModelUpdated_' + self.fileName + '.pdf')
     def num_val_schematic(self,time,show=True):
         self.bore_data()
         idx = np.argmin(np.abs(self.t_post - (time-self.coll_time)))
@@ -1188,7 +1194,7 @@ class TurbiditySim:
         x_lower_bound = -max(x_u,np.abs(x_l))
 
         article_params()
-        plt.figure(figsize=[5.125,2.25])
+        plt.figure(figsize=[5.125,2.55])
 
         #plt.subplot(131)
         ##self.plot_height_conc_time(0,xlim=[-5,5],cb=False)
@@ -1218,32 +1224,33 @@ class TurbiditySim:
         y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
         plt.annotate(
             '$h_-$',
-            xy=(bore_pos+0.01*x_width,hm),
-            xytext=(bore_pos + 0.08*x_width,hm),
+            xy=(bore_pos-0.01*x_width,hm),
+            xytext=(bore_pos - 0.08*x_width,hm-0.25*y_height),
             horizontalalignment='center',
             verticalalignment = 'center',
             arrowprops=AP
         )
         plt.annotate(
             '$h_+$',
-            xy=(bore_pos-0.01*x_width,hp),
-            xytext=(bore_pos - 0.08*x_width,hp+0.0),
+            xy=(bore_pos+0.01*x_width,hp),
+            xytext=(bore_pos + 0.08*x_width,hp+0.25*y_height),
             horizontalalignment='center',
             verticalalignment = 'center',
             arrowprops=AP
         )
+        y_axis = plt.gca().get_ylim()[0]
         plt.annotate(
             '$x_b$',
             xy=(bore_pos, hp-0.05*y_height),
-            xytext=(bore_pos,plt.gca().get_ylim()[0]-0.25*y_height),
+            xytext=(bore_pos,y_axis-0.22*y_height),
             horizontalalignment='center',
             verticalalignment = 'top',
             arrowprops=AP
         )
         plt.annotate(
             '$x_N$',
-            xy=(front_pos,plt.gca().get_ylim()[0]),
-            xytext=(front_pos,plt.gca().get_ylim()[0]-0.25*y_height),
+            xy=(front_pos,y_axis),
+            xytext=(front_pos,y_axis-0.22*y_height),
             horizontalalignment='center',
             verticalalignment = 'top',
             arrowprops=AP
@@ -1281,10 +1288,11 @@ class TurbiditySim:
         vel_bound = np.max(np.abs(plt.gca().get_ylim()))
         plt.ylim([-vel_bound,vel_bound])
         y_height = plt.gca().get_ylim()[1]-plt.gca().get_ylim()[0]
+        y_axis = plt.gca().get_ylim()[0]
         plt.annotate(
             '$x_b$',
             xy=(bore_pos,up-0.05*y_height),
-            xytext=(bore_pos,up-0.35*y_height),
+            xytext=(bore_pos,y_axis-0.18*y_height),
             horizontalalignment='center',
             verticalalignment = 'top',
             arrowprops=AP
@@ -1299,7 +1307,7 @@ class TurbiditySim:
         plt.annotate(
             '$x_N$',
             xy=(front_pos,0-0.05*y_height),
-            xytext=(front_pos,plt.gca().get_ylim()[0]-0.15*y_height),
+            xytext=(front_pos,y_axis-0.18*y_height),
             # xy=(front_pos,up-0.05*y_height),
             # xytext=(front_pos,up-0.35*y_height),
             horizontalalignment='center',
@@ -1308,7 +1316,7 @@ class TurbiditySim:
         )
         panel_label(plt.gca())
 
-        plt.subplots_adjust(left = 0.11,right = 0.99, bottom = 0.2, top = 0.96,hspace = 0.26)
+        plt.subplots_adjust(left = 0.11,right = 0.99, bottom = 0.2, top = 0.96,hspace = 0.52)
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.png',dpi = 1200)
         plt.savefig(self.rootFile + 'solutions/plots/' + 'NumValSchem_' + self.fileName + '.pdf')
         if show: plt.show()
@@ -1404,7 +1412,7 @@ def Deposit_Results(
         ],
         SimPack=None,
         U_s=0.01,
-        rootFile = 'Jun12_DepositionExamplePlots/',
+        rootFile = 'FinalData_Jun12_DepositionExamplePlots/',
         N=28000,sharp=200,finalTime=40.,
         save=True,subplot=True,dt_plot = 0.1,
         xb = 20,
@@ -1503,7 +1511,7 @@ def Deposit_Results(
         #     fig.text(i,0.05,f'{i:0.1f}',ha='center',va='center')
         #     fig.text(0.95,i,f'{i:0.1f}',ha='center',va='center')
         if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.png',dpi=1000)
-        if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.pdf',dpi=1000)
+        if save: savefig_replace(coll.rootFile + 'solutions/plots/Deposit_examples' + '.pdf',dpi=1000)
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
     else:
@@ -1919,7 +1927,7 @@ class DepositionAnalysis:
 
         if save:
             plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.png', dpi=1000)
-            plt.savefig(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', dpi=800)
+            savefig_replace(self.rootFile + 'solutions/plots/' + attr + self.fileName + '.pdf', dpi=800)
             plt.close()
             plt.rcParams.update({"text.usetex":False})
 
@@ -1936,14 +1944,33 @@ class DepositionAnalysis:
         plt.close()
         plt.rcParams.update({"text.usetex":False})
 
-    def linear_appr(self,X,Y,Z):
+    def linear_appr(self,X,Y,Z,linear = True):
         Xf,Yf,Zf = X.flatten(), Y.flatten(), Z.flatten()
         no_nans = ~np.isnan(Zf)
         Xf,Yf,Zf = Xf[no_nans],Yf[no_nans],Zf[no_nans]
-        A = np.array([Xf,Yf,np.ones(Zf.shape[0])]).T
-        a, b, c =  np.linalg.solve(np.matmul(A.T,A),np.matmul(A.T,np.array([Zf]).T)).flatten()
-        print('a = %0.4f, b = %0.4f, c = %0.4f'%(a,b,c))
-        return a*X + b*Y + c*np.ones(Z.shape) + 0*Z #The +0*Z at the end is to ``re-introduce'' the nans so that the approximation is not plotted everywhere (bit overwhelming)
+        if linear:
+            A = np.array([Xf-self.hL0,Yf-self.cL0]).T
+            a, b =  np.linalg.solve(np.matmul(A.T,A),np.matmul(A.T,np.array([Zf]).T)).flatten()
+        else:
+            A = np.array([Xf,Yf,np.ones(Zf.shape[0])]).T
+            a, b, c =  np.linalg.solve(np.matmul(A.T,A),np.matmul(A.T,np.array([Zf]).T)).flatten()
+
+        mu = np.average(Zf)
+        if linear:
+            P_flat = a*(X-self.hL0) + b*(Y-self.cL0)
+        else:
+            P_flat = a*X + b*Y + c*np.ones(Z.shape)
+        P_flat = P_flat.flatten()
+        E = Zf - P_flat[no_nans]
+        R2 = 1-np.dot(E,E)/np.dot(Zf-mu,Zf-mu)
+
+        if linear:
+            P = a*(X-self.hL0) + b*(Y-self.cL0) + 0*Z
+            print('a = %0.4f, b = %0.4f, R^2 = %0.4f'%(a,b,R2))
+        else:
+            P = a*X + b*Y + c*np.ones(Z.shape) + 0*Z
+            print('a = %0.4f, b = %0.4f, c = %0.4f, R^2 = %0.4f'%(a,b,c,R2))
+        return P #The +0*Z at the end is to ``re-introduce'' the nans so that the approximation is not plotted everywhere (bit overwhelming)
 
     def quadratic_appr(self,X,Y,Z):
         Xf,Yf,Zf = X.flatten(), Y.flatten(), Z.flatten()
@@ -2203,8 +2230,6 @@ def NumericalValidationScheme(
         )
 
     def plot_numer(X,Y,which_test,my_label,variable_y_label,par_list,x_Min,x_Max,legend_list=None,show_legend=False):
-        # plt.rcParams.update({"text.usetex":True,'font.size':16,'lines.linewidth':3,'legend.fontsize':16,'xtick.labelsize':14,'ytick.labelsize':14})
-        # plt.figure(figsize = [6,5])
         if legend_list is None:
             legend_list = par_list
         precision = label_precision(legend_list)
@@ -2220,14 +2245,9 @@ def NumericalValidationScheme(
             str_label = f'${my_label} = {par:.{precision}f}$'
             plt.plot(x,y,label = str_label)
         plt.xlabel('$x$')
-        # plt.ylabel(variable_y_label)
         plt.ylabel(variable_dict[variable_y_label+'_latex'])
         if show_legend:
             plt.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), borderaxespad=0.)
-
-        # plt.savefig(rootFile + 'solutions/plots/' + which_test + '_' + variable_y_label + '.pdf')
-        # plt.close()
-        # plt.rcParams.update({"text.usetex":False})
 
     def print_latex_table(var,label,M):
         print('')
@@ -2307,7 +2327,7 @@ def NumericalValidationScheme(
         panel_label(plt.gca(),subplot_number=1)
 
         plt.subplots_adjust(right = 0.83, top = 0.99, left = 0.09, bottom = 0.15,wspace = 0.25,)
-        plt.savefig(rootFile + 'solutions/plots/NumericalValidation_' + param + '.pdf')
+        savefig_replace(rootFile + 'solutions/plots/NumericalValidation_' + param + '.pdf')
         plt.close()
             # plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
         for j in range(par_matrix.shape[0]):
@@ -2413,7 +2433,7 @@ def article_plots(Figs=list(range(1,12))):
         if cbar_label:
             cb.set_label(cbar_label,rotation = 90, labelpad=6)
         fullFileName = sim.rootFile + 'solutions/plots/' + 'SpaceTime_Subplots'
-        plt.savefig(fullFileName + '.pdf',dpi = 1200)
+        savefig_replace(fullFileName + '.pdf',dpi = 1200)
 
         # hTwo0.70_cTwo0.70_5apart_N6000_CFL0.100_T6.0_NuRe1000_Us0.000_hmin0.00010_sharp200
         # Figure 7,  Results - Space time plot
