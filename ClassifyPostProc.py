@@ -7,6 +7,7 @@ else:
     from matplotlib import colormaps as cm
 import matplotlib.animation as ani
 import matplotlib.ticker as tkr
+from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle, FancyArrowPatch
 import matplotlib.patheffects as pe
 from celluloid import Camera
@@ -583,10 +584,14 @@ class TurbiditySim:
         if save: plt.savefig(self.rootFile + 'solutions/plots/gradientDeposit_' + self.fileName + '.pdf',dpi=1000)
         if close: plt.close()
 
-    def deposit_pcolor(self,xb=20,d_max=None):
+    def deposit_pcolor(self,xb=20,d_max=None,C0_over_Cp=1,post_collision_only=False):
         horiz_mask = (self.x>=-xb) & (self.x<=xb)
-        d1 = self.d1[:,horiz_mask]
-        d2 = self.d2[:,horiz_mask]
+        time_mask = self.T>=self.coll_time if post_collision_only else self.T>=0
+        d1 = self.d1[np.ix_(time_mask,horiz_mask)]
+        d2 = self.d2[np.ix_(time_mask,horiz_mask)]
+        if post_collision_only:
+            d1 = d1 - d1[0,:]
+            d2 = d2 - d1[0,:]
         d_total = d1+d2
         x = self.x[horiz_mask]
         if d_max is None:
@@ -603,8 +608,8 @@ class TurbiditySim:
             valid = idx < len(h)
             P[valid,j] = d_pct[idx[valid],j]
 
-        plt.pcolormesh(x,d,np.ma.masked_invalid(P),cmap='PRGn_r', rasterized=True)
-        plt.plot(x,d_total[-1,:],color = 'k', linewidth=1)
+        plt.pcolormesh(x,C0_over_Cp*d,np.ma.masked_invalid(C0_over_Cp*P),cmap='PRGn_r', rasterized=True)
+        plt.plot(x,C0_over_Cp*d_total[-1,:],color = 'k', linewidth=1)
 
     def plot_encroachment(self,wantLegend=True, want_y_label=True):
         try:
@@ -992,7 +997,8 @@ class TurbiditySim:
         AP = dict(facecolor='black',width = 0.1, headwidth = 4,headlength=6) #Arrow properties for annotation
 
         article_params()
-        plt.figure(figsize=[5.125,1.8])
+        # plt.figure(figsize=[5.125,1.8])
+        plt.figure(figsize=[4.,1.5])
 
         # # Plot 1, height plot with h+,h-,xN,xB labeled
         # plt.subplot(311)
@@ -1078,12 +1084,13 @@ class TurbiditySim:
         # Plot 3, schematic for box model with "ghost" box drawn
         # plt.subplot(313)
         self.plot_time('h', time, xlim=[-x_upper_bound,x_upper_bound])
+        plt.gca().set_xlabel('')
         yb_min = plt.gca().get_ylim()[0]
         yb_max = plt.gca().get_ylim()[1] # yb is y bounds, so I want the y bound maximum
         plt.annotate(
             '$x_b$',
             xy=(bore_pos, yb_min),
-            xytext=(bore_pos, yb_min-0.25*(yb_max-yb_min)),
+            xytext=(bore_pos-0.00*front_pos, yb_min-0.25*(yb_max-yb_min)),
             horizontalalignment='center',
             verticalalignment = 'top',
             arrowprops=AP
@@ -1104,19 +1111,37 @@ class TurbiditySim:
             verticalalignment = 'top',
             arrowprops=AP
         )
+        plt.annotate(
+            '$X_i$',
+            xy=(self.apart/2,yb_min),
+            xytext=(self.apart/2+0.00*front_pos,yb_min-0.25*(yb_max-yb_min)),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP
+        )
+        plt.annotate(
+            '$X_c$',
+            # xy=(0,yb_min-0.10*(yb_max-yb_min)),
+            xy=(0,yb_min-0.19*(yb_max-yb_min)),
+            xytext=(0,yb_min-0.37*(yb_max-yb_min)),
+            horizontalalignment='center',
+            verticalalignment = 'top',
+            arrowprops=AP,
+            annotation_clip=False,
+        )
         # plt.annotate(
         #     '$(X_c=0)$',
         #     xy = (0,yb_min - 0.25*(yb_max-yb_min)),
         #     horizontalalignment = 'center',
         #     verticalalignment = 'top',
         # )
-        plt.text(
-            0,
-            yb_min - 0.33*(yb_max-yb_min),
-            '$(X_c=0)$',
-            horizontalalignment = 'center',
-            verticalalignment = 'top',
-        )
+        # plt.text(
+        #     0,
+        #     yb_min - 0.25*(yb_max-yb_min),
+        #     '$(X_c=0)$',
+        #     horizontalalignment = 'center',
+        #     verticalalignment = 'top',
+        # )
         L1,L2 = self.get_oneSided_boxModel_vertices(
             time,
             self.t_post,
@@ -1168,11 +1193,11 @@ class TurbiditySim:
                 color=ghost_box_color
             )
         )
-        plt.gca().set_xticks([-12,-6,0,6,12])
+        plt.gca().set_xticks([-12,-8,-4,0,4,8,12])
         # panel_label(plt.gca())
 
         # plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.11, top = 0.98,hspace = 0.45)
-        plt.subplots_adjust(left = 0.10,right = 0.99, bottom = 0.32, top = 0.98,hspace = 0.0)
+        plt.subplots_adjust(left = 0.12,right = 0.98, bottom = 0.33, top = 0.98,hspace = 0.0)
         if show:
             plt.show()
         else:
@@ -1401,6 +1426,92 @@ class TurbiditySim:
         plt.xlabel('time')
         plt.ylabel('concentration')
 
+def deposit_mass_v_time(
+        SimVars = [
+            (1.00, 1.00),
+            (1.43, 0.70),
+            (1.00, 0.70),
+            (0.70, 0.70),
+            (0.70, 1.00),
+            (0.70, 1.43)
+        ],
+        U_s=0.01,
+        rootFile = 'FinalData_Jun12_DepositionExamplePlots/',
+        N=28000,sharp=200,finalTime=40.,
+        save=True,subplot=True,
+):
+    def get_mass_v_time(sim,normalize = True,percent = True):
+        deposited_total = (np.sum(sim.d1,axis = -1)+np.sum(sim.d2,axis = -1))*sim.dx
+        if normalize:
+            deposited_total = deposited_total/(sim.hL0*sim.cL0 + sim.hR0*sim.cR0)
+        if percent:
+            deposited_total = 100*deposited_total
+        return deposited_total
+
+    Sims, NoCollSims = [],[]
+    for sim in SimVars:
+        Sims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d1','d2'], sharp=sharp, N=N, finalTime=finalTime))
+        NoCollSims.append(TurbiditySim(sim[0],sim[1],U_s,rootFile,['d2'], subFile='sims/OneCurrOnly_', sharp=sharp, N=N, finalTime=finalTime))
+    for ncs in NoCollSims:
+        ncs.d1 = np.fliplr(NoCollSims[0].d2)
+        ncs.hL0 = NoCollSims[0].hL0
+        ncs.cL0 = NoCollSims[0].cL0
+
+    for sim,ncs in zip(Sims, NoCollSims):
+        sim.deposited_total = get_mass_v_time(sim)
+        ncs.deposited_total = get_mass_v_time(ncs)
+
+    article_params()
+    plt.figure(figsize=[6.125,2.5])
+    table_rows = []
+    for i in range(len(Sims)):
+        plt.plot(Sims[i].T,       Sims[i].deposited_total,       color = tabcolors[i],linestyle = 'solid', linewidth=1)
+        plt.plot(NoCollSims[i].T, NoCollSims[i].deposited_total, color = tabcolors[i],linestyle = 'dashed', linewidth=1)
+        t1 = Sims[i].T[Sims[i].deposited_total>99][0]
+        t2 = NoCollSims[i].T[NoCollSims[i].deposited_total>99][0]
+        table_rows.append((Sims[i].hR0,Sims[i].cR0,t1,t2,t1/t2))
+
+    legend_handles = [
+        Line2D([],[],color='k',linestyle='solid',label='Collision'),
+        Line2D([],[],color='k',linestyle='dashed',label='No Collision'),
+        Line2D([],[],color='white',label=''),
+    ]
+    legend_handles += [
+        Line2D(
+            [],[],
+            color=tabcolors[i],
+            linestyle='solid',
+            label='$h_r$=%0.2f, $c_r$=%0.2f'%(sim.hR0,sim.cR0),
+        )
+        for i,sim in enumerate(Sims)
+    ]
+    plt.legend(
+        handles=legend_handles,
+        ncol=1,
+        loc='center left',
+        bbox_to_anchor=(1.02,0.5),
+        borderaxespad=0.,
+    )
+    plt.grid()
+    plt.xlabel('Time')
+    plt.ylabel('Deposited Mass ($\\%$)')
+    plt.gca().yaxis.set_major_formatter(tkr.PercentFormatter(xmax=100,decimals=0))
+    plt.subplots_adjust(left=0.11,right=0.74,bottom=0.16,top=0.98)
+
+    print('')
+    print('        \\begin{tabular}{ccccc}')
+    print('        \\hline')
+    print('        $h_r$ & $c_r$ & Collision $t_{99}$ & No Collision $t_{99}$ & Ratio \\\\')
+    print('        \\hline')
+    for h_r,c_r,t1,t2,ratio in table_rows:
+        print(f'        {h_r:0.2f} & {c_r:0.2f} & {t1:0.2f} & {t2:0.2f} & {ratio:0.2f} \\\\')
+    print('        \\hline')
+    print('        \\end{tabular}')
+    print('')
+
+    plt.savefig(rootFile + 'solutions/plots/DepositedMassVersusTime.pdf')
+    plt.close()
+
 def Deposit_Results(
         SimVars = [
             (1.00, 1.00),
@@ -1416,6 +1527,8 @@ def Deposit_Results(
         N=28000,sharp=200,finalTime=40.,
         save=True,subplot=True,dt_plot = 0.1,
         xb = 20,
+        C0_over_Cp=1.,
+        post_collision_only=False,
 ):
 
     if SimPack == None:
@@ -1444,19 +1557,15 @@ def Deposit_Results(
             print(len(Sims),1,i+1)
             ax = plt.subplot(len(Sims),1,i+1)
             axes.append(ax)
-            coll.deposit_pcolor(xb=xb,d_max=yMax)
-            # coll.plot_deposit_gradient(
-            #     dt_plot=dt_plot,
-            #     show=False,
-            #     save=False,
-            #     xb=20,
-            #     yb=yMax,
-            #     cb = False,
-            #     close=False,
-            #     title=False,
-            #     subplot=True
-            # )
-            plt.plot(no_coll.x[(no_coll.x>=-xb) & (no_coll.x <= xb)], no_coll.d2[-1,(no_coll.x>=-xb) & (no_coll.x <= xb)] + LeftCurr_d1[(no_coll.x>=-xb) & (no_coll.x <= xb)], label = 'No Collision')
+            coll.deposit_pcolor(xb=xb,d_max=yMax,C0_over_Cp=C0_over_Cp,post_collision_only=post_collision_only)
+            t_coll = np.argwhere(no_coll.T >= coll.coll_time)[0][0]
+            print(t_coll)
+            x_mask = (no_coll.x>=-xb) & (no_coll.x <= xb)
+            pre_coll = no_coll.d2[t_coll,x_mask] + np.flip(LeftCurr.d2[t_coll,x_mask]) if post_collision_only else no_coll.d2[0,x_mask]
+            plt.plot(
+                no_coll.x[x_mask],
+                C0_over_Cp*(no_coll.d2[-1,x_mask] + LeftCurr_d1[x_mask] - pre_coll),
+                label = 'No Collision')
             if i ==0: plt.legend(loc = 'upper right')
             if i+1 != len(Sims): ax.set_xticklabels([])
             if i+1 != len(Sims): ax.tick_params(axis='x', which='major', length=2)
@@ -1487,7 +1596,7 @@ def Deposit_Results(
         #     fraction=0.05
         # )
         top_adjust = 0.95
-        left_adjust = 0.09
+        left_adjust = 0.13
         cax = fig.add_axes([0.2, top_adjust+0.015, 0.675, 0.025])
         cbar = fig.colorbar(sm, cax=cax, orientation='horizontal')
         cbar.set_ticks([])
@@ -1506,12 +1615,16 @@ def Deposit_Results(
         )
         # plt.subplots_adjust(left = 0.1, right =0.99,bottom=0.23,top =0.84)
         plt.subplots_adjust(left=left_adjust, right=0.985, bottom=0.1, top=top_adjust,hspace=0.1)
-        fig.text(left_adjust-0.07,0.5,'Deposit Height',rotation = 'vertical', ha = 'center', va = 'center')
+        fig.text(left_adjust-0.10,0.5,'Deposit Height',rotation = 'vertical', ha = 'center', va = 'center')
         # for i in [(i+1)/10 for i in range(10)]:
         #     fig.text(i,0.05,f'{i:0.1f}',ha='center',va='center')
         #     fig.text(0.95,i,f'{i:0.1f}',ha='center',va='center')
-        if save: plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + '.png',dpi=1000)
-        if save: savefig_replace(coll.rootFile + 'solutions/plots/Deposit_examples' + '.pdf',dpi=1000)
+        if save:
+            psc = '_post_collision_only' if post_collision_only else ''
+            plt.savefig(coll.rootFile + 'solutions/plots/Deposit_examples' + psc + '.png',dpi=1000)
+            savefig_replace(coll.rootFile + 'solutions/plots/Deposit_examples' + psc + '.pdf',dpi=1000)
+        else:
+            plt.show()
         #if save: plt.savefig(coll.rootFile + 'solutions/plots/gradientDeposit_' + coll.fileName + '.pdf',dpi=1000)
         plt.close()
     else:
@@ -1783,7 +1896,6 @@ def encroachment_by_concentration(t=[(1.0,1.0),(1.04,0.9),(1.06,0.8),(1.11,0.7),
     return t
 
 def FindMissingDeposits(U_s, rootFile, H2=np.linspace(0.7,1.42,73), C2=np.linspace(0.7,1.42,73),VARS=['d1','d2'], N = 28000, NuRe = 1000, finalTime = 40., h_min = 0.0001, CFL = 0.1, sharp = 200, apart = 5., FrSquared = 1., hL0 = 1.0, cL0 = 1.0, NuPe = None, subFile = 'sims/'):
-    # breakpoint()
     locals_dict = locals().copy()
     locals_dict.pop('H2')
     locals_dict.pop('C2')
@@ -1839,7 +1951,7 @@ class DepositionAnalysis:
             for i,h2 in enumerate(H2):
                 for j,c2 in enumerate(C2):
                     if h2*c2<=1:
-                        try: 
+                        try:
                             temp_sim = TurbiditySim(h2,c2,self.U_s,self.rootFile,['d1','d2'],N=self.N, NuRe=self.NuRe, finalTime=self.finalTime, h_min=self.h_min, CFL=self.CFL, sharp=self.sharp, apart=self.apart, FrSquared=self.FrSquared)
                             if temp_sim.d1.shape[0]>1 and temp_sim.d2.shape[0]>1:
                                 temp_sim.deposition_details()
@@ -1872,11 +1984,11 @@ class DepositionAnalysis:
             np.savetxt(self.rootFile + self.subFile + 'COMx_' + self.fileName + '.csv', self.COM_x, delimiter = ',')
             print('%0.2f seconds'%(time.time()-start))
 
-    def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True,cbar_label = None):
+    def myPcolor(self,attr,plotTitle,streamlines=True,save=False,panel_label_align=True,cbar_label = None,scaling_factor=1.0):
         if save:
             article_params()
             plt.figure(figsize=[3.2,3*3/3.6])
-        Z = getattr(self,attr)
+        Z = scaling_factor*getattr(self,attr)
         Zm = np.ma.masked_invalid(Z)
         pplot = plt.pcolormesh(self.H2,self.C2,Z,shading = 'nearest',rasterized=True)
         plt.contour(self.H2,self.C2,Z,colors='k',levels=[0])
@@ -1920,9 +2032,9 @@ class DepositionAnalysis:
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         divider = make_axes_locatable(plt.gca())
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.1f'))
+        cb = plt.colorbar(pplot,cax=cax,format=tkr.FormatStrFormatter('%.3f'))
         if cbar_label: cb.set_label(cbar_label, rotation=90, labelpad=6)
-        cb.set_ticks(np.arange(np.ceil(Zm.min()*10),np.floor(Zm.max()*10)+1)/10)
+        cb.set_ticks(np.arange(np.ceil(Zm.min()*10/scaling_factor),np.floor(Zm.max()*10/scaling_factor)+1)/10*scaling_factor)
         plt.subplots_adjust(left=0.16,right=0.84,top=0.99,bottom=0.16)
 
         if save:
@@ -1966,7 +2078,8 @@ class DepositionAnalysis:
 
         if linear:
             P = a*(X-self.hL0) + b*(Y-self.cL0) + 0*Z
-            print('a = %0.4f, b = %0.4f, R^2 = %0.4f'%(a,b,R2))
+            # print('a = %0.4f, b = %0.4f, R^2 = %0.4f'%(a,b,R2))
+            print(f'\mu_l(h_r,c_r)&=&{a:.4f} (h_r-1){b:.4f}(c_r-1) \\text{{\ \ \ for $\\us={self.U_s:.3f}$ with $R^2={R2:.4f}$}},')
         else:
             P = a*X + b*Y + c*np.ones(Z.shape) + 0*Z
             print('a = %0.4f, b = %0.4f, c = %0.4f, R^2 = %0.4f'%(a,b,c,R2))
@@ -1981,13 +2094,13 @@ class DepositionAnalysis:
         print('a = %0.4f, b = %0.4f, c = %0.4f, d = %0.4f, e = %0.4f, f = %0.4f'%(a,b,c,d,e,f))
         return a*X*X + b*X*Y + c*Y*Y + d*X + e*Y + f*np.ones(Z.shape) + 0*Z #The +0*Z at the end is to ``re-introduce'' the nans so that the approximation is not plotted everywhere (bit overwhelming)
 
-    def mpl3Dplot(self,azim=-50,elev=10,save=True):
+    def mpl3Dplot(self,azim=-50,elev=10,save=True,linear=True):
         article_params()
         X = self.H_mesh
         Y = self.C_mesh
         Z = self.encroachment_mass
         Z_masked = np.ma.masked_invalid(Z)
-        P = self.linear_appr(X,Y,Z)
+        P = self.linear_appr(X,Y,Z,linear=linear)
         P_masked = np.ma.masked_invalid(P)
         fig,ax = plt.subplots(figsize = (2.6,2.1),subplot_kw = dict(projection = '3d'))
         ax.plot_surface(X,Y,Z_masked,cmap=cm['viridis'],vmin=Z_masked.min(),vmax=Z_masked.max(),linewidth=0,alpha=0.7)
@@ -2261,7 +2374,7 @@ def NumericalValidationScheme(
             string_ = '        $'+l[i]+'$'
             for j in range(cols):
                 if i==0 and j == M.shape[1]-1:
-                    string_ += ' & %s'%('\\%')
+                    string_ += ' & %s'%('Relative Error')
                 elif i==0:
                     string_ += f' & {M[i,j]:.{precision}f} '
                 else:
@@ -2291,7 +2404,6 @@ def NumericalValidationScheme(
             params = dict(N=N, h_min=h_min, NuRe=NuRe, CFL=CFL, sharp=sharp)
             params[param] = val   # override the one we’re sweeping
             sim = TurbiditySim(1.0,1.0,U_s,rootFile,['h','u','c1','c2'],finalTime=T,**params)
-            # breakpoint()
 
             # t, bore, hp, hm, up, um, xx,yy,zz=u_pm(subSampleBy=1,rootFile='NumericalValidation_2025Mar19/',rootFileName='',N=N,h_min=h_min,NuRe = par_list[i],CFL=0.1,sharp=200)
             shift_idx = np.argwhere(sim.x>0)[0][0]
@@ -2331,7 +2443,7 @@ def NumericalValidationScheme(
         plt.close()
             # plot_numer(X_plot,U_plot,'Reynolds','\\textrm{Re}','velocity',par_list,x_min_bore-0.5,x_max_bore+0.5);
         for j in range(par_matrix.shape[0]):
-            par_matrix[j,-1] = 100*np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
+            par_matrix[j,-1] = np.abs((par_matrix[j,-2]-par_matrix[j,0])/par_matrix[j,-2])
         print_latex_table(label_table, legend_list, par_matrix)
         # return par_matrix
     NumericalVal('NuRe',[250,500,1000,2000],'\\Rey','\\textrm{Re}')
@@ -2396,7 +2508,7 @@ def article_plots(Figs=list(range(1,12))):
         # Figures 3 and 4,  Numerical validation for spatial resolution
     if 5 in Figs:
         # Figure 5,  Sediment deposition - example solutions
-        Deposit_Results()
+        Deposit_Results(C0_over_Cp=0.01)
         # Matching vertical axes
         # vertically stacked
         # Separate figures, since each one is a different run
@@ -2404,10 +2516,13 @@ def article_plots(Figs=list(range(1,12))):
         # Figure 6,  Sediment deposition - Encroachment mass colormap
         DepositionAnalysis(
             0.01,
-            'Feb26_2026_SedimentationInitialConditionTest/',
+            'FinalData_Sep24_SedimentationIC/',
             N=28000,
             sharp=200
-        ).myPcolor('encroachment_mass','',save=True, cbar_label='encroachment mass, $\mu$')
+        ).myPcolor('encroachment_mass','',save=True,scaling_factor=0.01)
+        for u_s in (0.005,0.01,0.015,0.02):
+            DepositionAnalysis(u_s,'FinalData_Sep24_SedimentationIC/',N=28000,sharp=200).mpl3Dplot(save=False)
+
         # add a,b,c,d at correct locations aligning with figure 6
         # change labels to c_r and h_r
         # only 1 significant digit on the colorba OLD Figure,  Sediment deposition - Encroachment mass 3D view with planar approximation
@@ -2416,8 +2531,8 @@ def article_plots(Figs=list(range(1,12))):
     if 7 in Figs:
         article_params()
 
-        # cbar_label = None
-        cbar_label = variable_dict['h_latex']
+        cbar_label = None
+        # cbar_label = variable_dict['h_latex']
         fig, ax = plt.subplots(
             1, 2,
             figsize = [6.5 if cbar_label is not None else 6,2.5],
@@ -2441,7 +2556,7 @@ def article_plots(Figs=list(range(1,12))):
     if 8 in Figs:
         # Figure 8,  Box model - schematic
         # MainSim.box_model_schematic(6,show=False)
-        Fig2_7_8Sims[0].box_model_schematic(6,show=False)
+        Fig2_7_8Sims[0].box_model_schematic(4.8,show=False)
         # Remove top two panels, they are redundant with figure 1
         # Switch to be avg h-/+ for third panel
     if 9 in Figs:
